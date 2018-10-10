@@ -1,6 +1,7 @@
 #include <memory>
 #include <vector>
 #include <array>
+#include <numeric>
 
 
 
@@ -25,6 +26,8 @@ public:
         for (auto dim = 0; dim < rank; ++dim)
         {
             total_size *= dim_sizes[dim];
+
+            count[dim] = dim_sizes[dim];
             start[dim] = 0;
             stop[dim] = dim_sizes[dim];
             skip[dim] = 1;
@@ -33,38 +36,53 @@ public:
     }
 
     ndarray(
-        std::shared_ptr<std::vector<double>> data,
+        std::array<size_t, rank> count,
         std::array<size_t, rank> start,
         std::array<size_t, rank> stop,
-        std::array<size_t, rank> skip)
-    : data(data)
+        std::array<size_t, rank> skip,
+        std::shared_ptr<std::vector<double>> data)
+    : count(count)
     , start(start)
     , stop(stop)
-    , skip(skip) {}
+    , skip(skip)
+    , data(data)
+    {
+        assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
+    }
 
     ndarray<rank - 1> operator[](int index)
     {
+        auto s = strides();
+
+        std::array<size_t, rank - 1> _count;
         std::array<size_t, rank - 1> _start;
         std::array<size_t, rank - 1> _stop;
         std::array<size_t, rank - 1> _skip;
 
-        for (int n = 0; n < rank - 1; ++n)
+        _count[0] = count[0] * count[1];
+        _start[0] = start[0] * s[0] + skip[0] * index * s[0];
+        _stop[0] = _start[0] + _count[0];
+        _skip[0] = _skip[1];
+
+        for (int n = 1; n < rank - 1; ++n)
         {
+            _count[n] = count[n + 1];
             _start[n] = start[n + 1];
             _stop[n] = stop[n + 1];
             _skip[n] = skip[n + 1];
         }
-        return ndarray<rank - 1>(data, _start, _stop, _skip);
+        return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
 
     size_t size() const
     {
-        return data->size();
+        auto s = shape();
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
     }
 
     std::array<size_t, rank> shape() const
     {
-        std::array<size_t, rank> s;        
+        std::array<size_t, rank> s;
 
         for (int n = 0; n < rank; ++n)
         {
@@ -73,20 +91,43 @@ public:
         return s;
     }
 
+    std::array<size_t, rank> strides() const
+    {
+        std::array<size_t, rank> s;
+        s[rank - 1] = 1;
+
+        for (int n = rank - 2; n >= 0; --n)
+        {
+            s[n] *= count[n + 1];
+        }
+        return s;
+    }
+
+    template <typename... Index>
+    size_t offset(Index... index) const
+    {
+        static_assert(sizeof...(index) == rank,
+          "Number of arguments to ndarray::offset must match rank");
+
+        return offset({index...});
+    }
+
 private:
-    size_t offset(std::array<size_t, rank> index) const
+    size_t offset(std::array<int, rank> index) const
     {
         size_t m = 0;
         size_t s = 1;
 
         for (int n = rank - 1; n >= 0; --n)
         {
-            m += s * index[n];
-            s *= (stop[n] - start[n]) / skip[n];
+            m += start[n] * s + skip[n] * index[n] * s;
+            s *= count[n];
         }
         return m;
     }
+
     std::shared_ptr<std::vector<double>> data;
+    std::array<size_t, rank> count;
     std::array<size_t, rank> start;
     std::array<size_t, rank> stop;
     std::array<size_t, rank> skip;
