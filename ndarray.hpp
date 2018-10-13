@@ -59,10 +59,14 @@ public:
         std::array<size_t, rank - 1> _stop;
         std::array<size_t, rank - 1> _skip;
 
+        // std::cout << "start[0]: " << start[0] << std::endl;
+        // std::cout << "skip[0]: " << skip[0] << std::endl;
+        // std::cout << "s[0]: " << s[0] << std::endl;
+
         _count[0] = count[0] * count[1];
         _start[0] = start[0] * s[0] + skip[0] * index * s[0];
-        _stop[0] = _start[0] + _count[0];
-        _skip[0] = _skip[1];
+        _stop[0] = _start[0] + count[1];
+        _skip[0] = skip[1];
 
         for (int n = 1; n < rank - 1; ++n)
         {
@@ -71,6 +75,17 @@ public:
             _stop[n] = stop[n + 1];
             _skip[n] = skip[n + 1];
         }
+
+        // std::cout << "count[0]: " << _count[0] << std::endl;
+        // std::cout << "start[0]: " << _start[0] << std::endl;
+        // std::cout << "stop[0]: " << _stop[0] << std::endl;
+        // std::cout << "skip[0]: " << _skip[0] << std::endl;
+
+        // std::cout << "count[1]: " << _count[1] << std::endl;
+        // std::cout << "start[1]: " << _start[1] << std::endl;
+        // std::cout << "stop[1]: " << _stop[1] << std::endl;
+        // std::cout << "skip[1]: " << _skip[1] << std::endl;
+
         return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
 
@@ -98,7 +113,7 @@ public:
 
         for (int n = rank - 2; n >= 0; --n)
         {
-            s[n] *= count[n + 1];
+            s[n] = s[n + 1] * count[n + 1];
         }
         return s;
     }
