@@ -20,26 +20,28 @@ public:
     }
 
     ndarray(std::array<int, rank> dim_sizes)
+    : count(dim_sizes)
+    , start(constant_int_array<rank>(0))
+    , stop(dim_sizes)
+    , skip(constant_int_array<rank>(1))
+    , data(std::make_shared<std::vector<double>>(product(dim_sizes)))
+    {}
+
+    ndarray(std::array<int, rank> dim_sizes, std::shared_ptr<std::vector<double>> data)
+    : count(dim_sizes)
+    , start(constant_int_array<rank>(0))
+    , stop(dim_sizes)
+    , skip(constant_int_array<rank>(1))
+    , data(data)
     {
-        size_t total_size = 1;
-
-        for (auto dim = 0; dim < rank; ++dim)
-        {
-            total_size *= dim_sizes[dim];
-
-            count[dim] = dim_sizes[dim];
-            start[dim] = 0;
-            stop[dim] = dim_sizes[dim];
-            skip[dim] = 1;
-        }
-        data = std::make_shared<std::vector<double>>(total_size);
+        assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
     }
 
     ndarray(
-        std::array<size_t, rank> count,
-        std::array<size_t, rank> start,
-        std::array<size_t, rank> stop,
-        std::array<size_t, rank> skip,
+        std::array<int, rank> count,
+        std::array<int, rank> start,
+        std::array<int, rank> stop,
+        std::array<int, rank> skip,
         std::shared_ptr<std::vector<double>> data)
     : count(count)
     , start(start)
@@ -54,14 +56,10 @@ public:
     {
         auto s = strides();
 
-        std::array<size_t, rank - 1> _count;
-        std::array<size_t, rank - 1> _start;
-        std::array<size_t, rank - 1> _stop;
-        std::array<size_t, rank - 1> _skip;
-
-        // std::cout << "start[0]: " << start[0] << std::endl;
-        // std::cout << "skip[0]: " << skip[0] << std::endl;
-        // std::cout << "s[0]: " << s[0] << std::endl;
+        std::array<int, rank - 1> _count;
+        std::array<int, rank - 1> _start;
+        std::array<int, rank - 1> _stop;
+        std::array<int, rank - 1> _skip;
 
         _count[0] = count[0] * count[1];
         _start[0] = start[0] * s[0] + skip[0] * index * s[0];
@@ -76,16 +74,6 @@ public:
             _skip[n] = skip[n + 1];
         }
 
-        // std::cout << "count[0]: " << _count[0] << std::endl;
-        // std::cout << "start[0]: " << _start[0] << std::endl;
-        // std::cout << "stop[0]: " << _stop[0] << std::endl;
-        // std::cout << "skip[0]: " << _skip[0] << std::endl;
-
-        // std::cout << "count[1]: " << _count[1] << std::endl;
-        // std::cout << "start[1]: " << _start[1] << std::endl;
-        // std::cout << "stop[1]: " << _stop[1] << std::endl;
-        // std::cout << "skip[1]: " << _skip[1] << std::endl;
-
         return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
 
@@ -95,9 +83,9 @@ public:
         return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
     }
 
-    std::array<size_t, rank> shape() const
+    std::array<int, rank> shape() const
     {
-        std::array<size_t, rank> s;
+        std::array<int, rank> s;
 
         for (int n = 0; n < rank; ++n)
         {
@@ -106,9 +94,9 @@ public:
         return s;
     }
 
-    std::array<size_t, rank> strides() const
+    std::array<int, rank> strides() const
     {
-        std::array<size_t, rank> s;
+        std::array<int, rank> s;
         s[rank - 1] = 1;
 
         for (int n = rank - 2; n >= 0; --n)
@@ -127,6 +115,38 @@ public:
         return offset({index...});
     }
 
+    template<int new_rank>
+    ndarray<new_rank> reshape(std::array<int, new_rank> dim_sizes) const
+    {
+        assert(contiguous());
+        return ndarray<new_rank>(dim_sizes, data);
+    }
+
+    template<typename... DimSizes>
+    ndarray<sizeof...(DimSizes)> reshape(DimSizes... dim_sizes) const
+    {
+        assert(contiguous());
+        return ndarray<sizeof...(DimSizes)>({dim_sizes...}, data);
+    }
+
+    bool contiguous() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (start[n] != 0 || stop[n] != count[n] || skip[n] != 1)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    template<int other_rank>
+    bool shares_memory_with(const ndarray<other_rank>& other)
+    {
+        return data == other.data;
+    }
+
 private:
     size_t offset(std::array<int, rank> index) const
     {
@@ -141,9 +161,32 @@ private:
         return m;
     }
 
+    template<int length>
+    static std::array<int, length> constant_int_array(int value)
+    {
+        std::array<int, length> A;
+
+        for (auto& a : A)
+        {
+            a = value;
+        }
+        return A;
+    }
+
+    template<typename C>
+    static size_t product(const C& c)
+    {
+        return std::accumulate(c.begin(), c.end(), 1, std::multiplies<>());
+    }
+
     std::shared_ptr<std::vector<double>> data;
-    std::array<size_t, rank> count;
-    std::array<size_t, rank> start;
-    std::array<size_t, rank> stop;
-    std::array<size_t, rank> skip;
+    std::array<int, rank> count;
+    std::array<int, rank> start;
+    std::array<int, rank> stop;
+    std::array<int, rank> skip;
+
+    /** Grants friendship to ndarrays of all other ranks.
+     */
+    template<int other_rank>
+    friend class ndarray;
 };
