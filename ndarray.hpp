@@ -115,6 +115,24 @@ public:
         return offset({index...});
     }
 
+    template <typename... Index>
+    double& operator()(Index... index)
+    {
+        static_assert(sizeof...(index) == rank,
+          "Number of arguments to ndarray::operator() must match rank");
+
+        return data->operator[](offset({index...}));
+    }
+
+    template <typename... Index>
+    const double& operator()(Index... index) const
+    {
+        static_assert(sizeof...(index) == rank,
+          "Number of arguments to ndarray::operator() must match rank");
+
+        return data->operator[](offset({index...}));
+    }
+
     template<int new_rank>
     ndarray<new_rank> reshape(std::array<int, new_rank> dim_sizes) const
     {
@@ -142,11 +160,15 @@ public:
     }
 
     template<int other_rank>
-    bool shares_memory_with(const ndarray<other_rank>& other)
+    bool shares(const ndarray<other_rank>& other)
     {
         return data == other.data;
     }
 
+    /**
+     * Private methods
+     * 
+     */
 private:
     size_t offset(std::array<int, rank> index) const
     {
