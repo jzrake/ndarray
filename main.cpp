@@ -98,15 +98,23 @@ int main()
     assert(ndarray<3>(2, 3, 4).offset(0, 2, 1) == 9);
     assert(ndarray<3>(2, 3, 4).offset(1, 2, 1) == 21);
 
-
 	ndarray<3> A(3, 3, 3);
 	ndarray<3> B(3, 3, 3);
     assert(A.shares(A) == true);
     assert(A.shares(B) == false);
     assert(A.shares(A.reshape(9, 3)) == true);
 
-    A(0, 0, 0) = 12;
-    std::cout << A(0, 0, 0) << std::endl;
+    A(0, 0, 0) = 1;
+    A(0, 1, 0) = 2;
+    A(0, 1, 2) = 3;
 
-    auto C = A.select<1>(1, 3);
+    assert(A(0, 0, 0) == 1);
+    assert(A(0, 1, 0) == 2);
+    assert(A(0, 1, 2) == 3);
+    assert(A.select(1, 1, 3).shape() == (std::array<int, 3>{3, 2, 3}));
+    assert(A.select(1, 1, 3)(0, 0, 0) == 2);
+    assert(A.select(1, 1, 3)(0, 0, 2) == 3);
+
+    assert(A.within(std::make_tuple(0, 3), std::make_tuple(1, 3), std::make_tuple(2, 3)).shape() == (std::array<int, 3>{3, 2, 1}));
+    assert(A.within(std::make_tuple(0, 2), std::make_tuple(1, 3), std::make_tuple(0, 3)).shape() == (std::array<int, 3>{2, 2, 3}));
 }

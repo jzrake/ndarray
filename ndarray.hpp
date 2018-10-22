@@ -6,13 +6,39 @@
 
 
 
+
 // ============================================================================
-template <int rank>
+template<int rank>
 class ndarray
 {
 public:
 
-    template <typename... Dims>
+
+
+    // ========================================================================
+    template<typename S, int a>
+    struct recurse_selector
+    {
+        static ndarray<rank> select(ndarray<rank> A, S s)
+        {
+            return recurse_selector<S, a - 1>::select(A.select(a, std::get<0>(s[a]), std::get<1>(s[a])), s);
+        }
+    };
+
+    template<typename S>
+    struct recurse_selector<S, 0>
+    {
+        static ndarray<rank> select(ndarray<rank> A, S s)
+        {
+            return A.select(0, std::get<0>(s[0]), std::get<1>(s[0]));
+        }
+    };
+
+
+
+
+    // ========================================================================
+    template<typename... Dims>
     ndarray(Dims... dims) : ndarray(std::array<int, rank>({dims...}))
     {
         static_assert(sizeof...(dims) == rank,
@@ -52,6 +78,10 @@ public:
         assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
     }
 
+
+
+
+    // ========================================================================
     ndarray<rank - 1> operator[](int index)
     {
         auto s = strides();
@@ -77,18 +107,28 @@ public:
         return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
 
-    template<int axis>
-    ndarray<rank> select(int start_index, int stop_index) const
+    ndarray<rank> select(int axis, int start_index, int stop_index) const
     {
         auto _count = count;
         auto _start = start;
         auto _stop = stop;
         auto _skip = skip;
 
-        _start[axis] = _start[axis] + start_index;
-        _stop[axis] = _start[axis] + stop_index;
+        _start[axis] = start[axis] + start_index;
+        _stop[axis] = start[axis] + stop_index;
 
-        return ndarray<rank> (_count, _start, _stop, _skip, data);
+        return ndarray<rank>(_count, _start, _stop, _skip, data);
+    }
+
+    template<typename... Slices>
+    ndarray<rank> within(Slices... slices) const
+    {
+        static_assert(sizeof...(slices) == rank,
+          "Number of arguments to ndarray::within must match rank");
+
+        return recurse_selector<
+        std::array<std::tuple<int, int>, rank>,
+        rank - 1>::select(*this, {slices...});
     }
 
     size_t size() const
@@ -120,7 +160,7 @@ public:
         return s;
     }
 
-    template <typename... Index>
+    template<typename... Index>
     size_t offset(Index... index) const
     {
         static_assert(sizeof...(index) == rank,
@@ -129,7 +169,7 @@ public:
         return offset({index...});
     }
 
-    template <typename... Index>
+    template<typename... Index>
     double& operator()(Index... index)
     {
         static_assert(sizeof...(index) == rank,
@@ -138,7 +178,7 @@ public:
         return data->operator[](offset({index...}));
     }
 
-    template <typename... Index>
+    template<typename... Index>
     const double& operator()(Index... index) const
     {
         static_assert(sizeof...(index) == rank,
