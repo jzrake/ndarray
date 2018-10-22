@@ -6,12 +6,12 @@
 
 
 
-
 // ============================================================================
 template<int rank>
 class ndarray
 {
 public:
+
 
 
 
@@ -84,6 +84,11 @@ public:
     // ========================================================================
     ndarray<rank - 1> operator[](int index)
     {
+        return collapse(0, index);
+    }
+
+    ndarray<rank - 1> collapse(int axis, int start_index) const
+    {
         auto s = strides();
 
         std::array<int, rank - 1> _count;
@@ -91,18 +96,26 @@ public:
         std::array<int, rank - 1> _stop;
         std::array<int, rank - 1> _skip;
 
-        _count[0] = count[0] * count[1];
-        _start[0] = start[0] * s[0] + skip[0] * index * s[0];
-        _stop[0] = _start[0] + count[1];
-        _skip[0] = skip[1];
+        for (int n = 0; n < axis; ++n)
+        {
+            _count[n] = count[n];
+            _start[n] = start[n];
+            _stop[n] = stop[n];
+            _skip[n] = skip[n];
+        }
 
-        for (int n = 1; n < rank - 1; ++n)
+        for (int n = axis + 1; n < rank - 1; ++n)
         {
             _count[n] = count[n + 1];
             _start[n] = start[n + 1];
             _stop[n] = stop[n + 1];
             _skip[n] = skip[n + 1];
         }
+
+        _count[axis] = count[axis] * count[axis + 1];
+        _start[axis] = start[axis] * s[axis] + skip[axis] * start_index * s[axis];
+        _stop[axis] = _start[axis] + count[axis + 1];
+        _skip[axis] = skip[axis + 1];
 
         return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
@@ -150,13 +163,9 @@ public:
 
     std::array<int, rank> strides() const
     {
-        std::array<int, rank> s;
+        std::array<int, rank> s = {1};
+        std::partial_sum(count.rbegin(), count.rend() - 1, s.rbegin() + 1, std::multiplies<int>());
         s[rank - 1] = 1;
-
-        for (int n = rank - 2; n >= 0; --n)
-        {
-            s[n] = s[n + 1] * count[n + 1];
-        }
         return s;
     }
 

@@ -4,76 +4,119 @@
 
 
 
-/**
-    Below is some code I got from StackExchange that supposedly allows to filter
-    a variadic template parameter pack.
 
-    https://codereview.stackexchange.com/questions/115740/filtering-variadic-template-arguments
-*/
 // ============================================================================
-
-// This works: but you can't instantiate list
-// template <typename...> struct list;
-
-// This also works: you can now instantiate a list
-template <typename... I>
-using list = std::tuple<I...>;
-
-template <typename... Lists> struct concat;
-
-template <template<typename> class Pred, typename T>
-using filter_helper = std::conditional_t<Pred<T>::value, list<T>, list<>>;
-
-template <template <typename> class Pred, typename... Ts> 
-using filter = typename concat<filter_helper<Pred, Ts>...>::type;
-
-template <>
-struct concat<> { using type = list<>; };
-
-template <typename... Ts>
-struct concat<list<Ts...>> { using type = list<Ts...>; };
-
-template <typename... Ts, typename... Us>
-struct concat<list<Ts...>, list<Us...>> { using type = list<Ts..., Us...>; };
-
-template<typename... Ts, typename... Us, typename... Rest>
-struct concat<list<Ts...>, list<Us...>, Rest...> { using type = typename concat<list<Ts..., Us...>, Rest...>::type; };
-
-
-
-template <typename A>
-using type_is_int = std::is_same<A, int>;
-
-
-
-template <typename... Ts>
-filter<type_is_int, Ts...> ret_filtered_type(Ts... args)
+template<int Rank, int Axis>
+struct selector
 {
-    return filter<type_is_int, Ts...>();
-}
+    enum { rank = Rank, axis = Axis };
+
+    selector<rank - 1, axis> collapse(int start_index) const
+    {
+        static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
+        static_assert(axis < rank, "selector: attempting to index on axis >= rank");
+
+        std::array<int, rank - 1> _count;
+        std::array<int, rank - 1> _start;
+        std::array<int, rank - 1> _final;
+
+        for (int n = 0; n < axis; ++n)
+        {
+            _count[n] = count[n];
+            _start[n] = start[n];
+            _final[n] = final[n];
+        }
+
+        for (int n = axis + 1; n < rank - 1; ++n)
+        {
+            _count[n] = count[n + 1];
+            _start[n] = start[n + 1];
+            _final[n] = final[n + 1];
+        }
+
+        _count[axis] = count[axis] * count[axis + 1];
+        _start[axis] = count[axis] * start_index;
+        _final[axis] = count[axis] * start_index + count[axis + 1];
+
+        return {_count, _start, _final};
+    }
+
+    selector<rank - 1, axis> within(int start_index) const
+    {
+        return collapse(start_index);
+    }
+
+    selector<rank, axis + 1> within(std::tuple<int, int> range) const
+    {
+        static_assert(axis < rank, "selector: attempting to index on axis >= rank");
+
+        auto _count = count;
+        auto _start = start;
+        auto _final = final;
+
+        _start[axis] = start[axis] + std::get<0>(range);
+        _final[axis] = start[axis] + std::get<1>(range);
+
+        return {_count, _start, _final};
+    }
+
+    template<typename First, typename... Rest>
+    auto within(First first, Rest... rest) const
+    {
+        return within(first).within(rest...);
+    }
+
+    std::array<int, rank> shape() const
+    {
+        std::array<int, rank> s;
+
+        for (int n = 0; n < rank; ++n)
+        {
+            s[n] = final[n] - start[n];
+        }
+        return s;
+    }
+
+    int size() const
+    {
+        auto s = shape();
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+    }
+
+    std::array<int, rank> count;
+    std::array<int, rank> start;
+    std::array<int, rank> final;
+};
 
 
 
 
-void test_filter()
+// ============================================================================
+void test_selector()
 {
-    using F = filter<type_is_int, int, int>;
-    static_assert(std::is_same<F, list<int, int>>::value, "");
+    auto S = selector<4, 0> {{4, 3, 2, 3}, {0, 0, 0, 0}, {4, 3, 2, 3}};
 
+    assert(S.collapse(0).count.size() == 3);
 
-    using G = filter<type_is_int, int, double>;
-    static_assert(std::is_same<G, std::tuple<int>>::value, "");
+    assert(S.count == (std::array<int, 4>{4, 3, 2, 3}));
+    assert(S.axis == 0);
+    assert(S.within(std::make_tuple(0, 1)).axis == 1);
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1), std::make_tuple(0, 1)).axis == 3);
 
+    assert(S.within(std::make_tuple(0, 1)).size() == 18);
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1)).size() == 6);
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1), std::make_tuple(0, 1)).size() == 3);
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1), std::make_tuple(0, 1), std::make_tuple(0, 1)).size() == 1);
 
-    using H = filter<type_is_int, std::tuple<int>>;
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1), 1, std::make_tuple(0, 1)).rank == 3);
+    assert(S.within(std::make_tuple(0, 1), std::make_tuple(0, 1), 1, std::make_tuple(0, 1)).size() == 1);
 
-    ret_filtered_type(0, 1, std::string());
+    auto $ = std::make_tuple(0, -1);
 
+    S.within(0, $, 0, $);
 
-    G g;
+    //assert(S.within({0, 1}, std::make_tuple(0, 1), 1, std::make_tuple(0, 1)).size() == 1);
 }
-
-
 
 
 
@@ -81,6 +124,8 @@ void test_filter()
 // ============================================================================
 int main()
 {
+    test_selector();
+
     assert(ndarray<3>(2, 3, 4).size() == 24);
     assert(ndarray<3>(2, 3, 4).shape() == (std::array<int, 3>{2, 3, 4}));
 
