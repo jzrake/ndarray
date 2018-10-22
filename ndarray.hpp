@@ -77,6 +77,20 @@ public:
         return ndarray<rank - 1>(_count, _start, _stop, _skip, data);
     }
 
+    template<int axis>
+    ndarray<rank> select(int start_index, int stop_index) const
+    {
+        auto _count = count;
+        auto _start = start;
+        auto _stop = stop;
+        auto _skip = skip;
+
+        _start[axis] = _start[axis] + start_index;
+        _stop[axis] = _start[axis] + stop_index;
+
+        return ndarray<rank> (_count, _start, _stop, _skip, data);
+    }
+
     size_t size() const
     {
         auto s = shape();
@@ -160,7 +174,7 @@ public:
     }
 
     template<int other_rank>
-    bool shares(const ndarray<other_rank>& other)
+    bool shares(const ndarray<other_rank>& other) const
     {
         return data == other.data;
     }

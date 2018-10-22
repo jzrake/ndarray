@@ -41,13 +41,17 @@ struct concat<list<Ts...>, list<Us...>, Rest...> { using type = typename concat<
 
 
 
+template <typename A>
+using type_is_int = std::is_same<A, int>;
 
-template<typename A>
-class type_is_int
+
+
+template <typename... Ts>
+filter<type_is_int, Ts...> ret_filtered_type(Ts... args)
 {
-public:
-    static constexpr bool value = std::is_same<A, int>::value;
-};
+    return filter<type_is_int, Ts...>();
+}
+
 
 
 
@@ -58,10 +62,18 @@ void test_filter()
 
 
     using G = filter<type_is_int, int, double>;
-    static_assert(std::is_same<G, list<int>>::value, "");
+    static_assert(std::is_same<G, std::tuple<int>>::value, "");
+
+
+    using H = filter<type_is_int, std::tuple<int>>;
+
+    ret_filtered_type(0, 1, std::string());
+
 
     G g;
 }
+
+
 
 
 
@@ -96,5 +108,5 @@ int main()
     A(0, 0, 0) = 12;
     std::cout << A(0, 0, 0) << std::endl;
 
-    //A.select({0, 1, 10}, {}, 0, {});
+    auto C = A.select<1>(1, 3);
 }
