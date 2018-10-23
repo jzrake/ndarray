@@ -214,7 +214,42 @@ TEST_CASE("ndarray<2> can be sliced, copied, and compared", "ndarray::select")
     {
         for (int j = 0; j < B.shape()[1]; ++j)
         {
-            REQUIRE(A(i, j) == B(i, j));
+            REQUIRE(B(i, j) == i + j);
         }
     }
+}
+
+
+TEST_CASE("ndarray<1> can be indexed const-correctly", "ndarray")
+{
+    const auto A = ndarray<1>{0, 1, 2, 3};
+    auto x = A(0);
+    auto B = A[0];
+    REQUIRE(x == B);
+    REQUIRE(! B.shares(A));
+}
+
+
+TEST_CASE("ndarray<2> can be sliced, indexed, and copied const-correctly", "ndarray")
+{
+    auto A = ndarray<2>(10, 10);
+
+    for (int i = 0; i < A.shape()[0]; ++i)
+    {
+        for (int j = 0; j < A.shape()[1]; ++j)
+        {
+            A(i, j) = i + j;
+        }
+    }
+
+    const auto Ac = A;
+    ndarray<1> B = Ac[0];
+    ndarray<2> C = Ac;
+    ndarray<2> D = A;
+    REQUIRE(Ac(0, 0) == B(0));
+    REQUIRE(Ac(0, 1) == B(1));
+    REQUIRE(! B.shares(Ac));
+    REQUIRE(! C.shares(Ac));
+    REQUIRE(D.shares(A));
+    REQUIRE(D.is(A));
 }

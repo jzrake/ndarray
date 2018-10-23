@@ -144,6 +144,17 @@ struct selector
         return true;
     }
 
+    /**
+        Return another selector for the same rank, axis, and shape, but with
+        start = 0 and count = shape.
+     */
+    selector<rank, axis> normalize() const
+    {
+        auto origin = start;
+        for (auto& si : origin) si = 0;
+        return {count, origin, count};
+    }
+
 
 
 
@@ -195,6 +206,16 @@ public:
      * 
      */
     // ========================================================================
+    ndarray(const ndarray<rank>& other)
+    {
+        *this = other.copy();
+    }
+
+    ndarray(ndarray<rank>& other)
+    {
+        *this = other;
+    }
+
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
     ndarray(double value=double())
     : scalar_offset(0)
@@ -203,7 +224,7 @@ public:
     }
 
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
-    ndarray(int scalar_offset, std::shared_ptr<std::vector<double>> data)
+    ndarray(int scalar_offset, std::shared_ptr<std::vector<double>>& data)
     : scalar_offset(scalar_offset)
     , data(data)
     {
@@ -228,7 +249,7 @@ public:
     }
 
     template<typename SelectorType>
-    ndarray(SelectorType selector, std::shared_ptr<std::vector<double>> data)
+    ndarray(SelectorType selector, std::shared_ptr<std::vector<double>>& data)
     : count(selector.count)
     , start(selector.start)
     , final(selector.final)
@@ -248,7 +269,7 @@ public:
     {
     }
 
-    ndarray(std::array<int, rank> dim_sizes, std::shared_ptr<std::vector<double>> data)
+    ndarray(std::array<int, rank> dim_sizes, std::shared_ptr<std::vector<double>>& data)
     : count(dim_sizes)
     , start(constant_array<int, rank>(0))
     , final(dim_sizes)
@@ -263,7 +284,7 @@ public:
         std::array<int, rank> count,
         std::array<int, rank> start,
         std::array<int, rank> final,
-        std::shared_ptr<std::vector<double>> data)
+        std::shared_ptr<std::vector<double>>& data)
     : count(count)
     , start(start)
     , final(final)
@@ -314,7 +335,14 @@ public:
     template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
     ndarray<rank - 1> operator[](int index)
     {
-        return ndarray<0>(offset_relative({index}), data);
+        return {offset_relative({index}), data};
+    }
+
+    template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
+    ndarray<rank - 1> operator[](int index) const
+    {
+        auto d = std::make_shared<std::vector<double>>(1, data->operator[](offset_relative({index})));
+        return {0, d};
     }
 
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
@@ -323,8 +351,32 @@ public:
         return {make_selector().collapse(index), data};
     }
 
+    template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
+    ndarray<rank - 1> operator[](int index) const
+    {
+        auto S = make_selector().collapse(index);
+        auto d = std::make_shared<std::vector<double>>(S.size());
+        auto a = d->begin();
+        auto b = begin();
+
+        for ( ; a != d->end(); ++a, ++b)
+        {
+            *a = *b;
+        }
+        return {S, d};
+    }
+
     template<typename... Index>
     double& operator()(Index... index)
+    {
+        static_assert(sizeof...(index) == rank,
+          "Number of arguments to ndarray::operator() must match rank");
+
+        return data->operator[](offset_relative({index...}));
+    }
+
+    template<typename... Index>
+    const double& operator()(Index... index) const
     {
         static_assert(sizeof...(index) == rank,
           "Number of arguments to ndarray::operator() must match rank");
@@ -358,7 +410,8 @@ public:
 
     ndarray<rank> copy() const
     {
-        return {shape(), std::make_shared<std::vector<double>>(begin(), end())};
+        auto d = std::make_shared<std::vector<double>>(begin(), end());
+        return {shape(), d};
     }
 
     const std::vector<double>& container() const
@@ -385,19 +438,46 @@ public:
         using reference = double&;
         using iterator_category = std::forward_iterator_tag;
 
-        iterator(ndarray<rank> array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        iterator(ndarray<rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
         iterator& operator++() { it.operator++(); return *this; }
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
-        double operator*() { return array.offset_absolute(*it); }
+        double& operator*() { return array.data->operator[](array.offset_absolute(*it)); }
     private:
         typename selector<rank>::iterator it;
-        ndarray<rank> array;
+        ndarray<rank>& array;
     };
 
-    iterator begin() const { return {*this, make_selector().begin()}; }
-    iterator end() const { return {*this, make_selector().end()}; }
+    iterator begin() { return {*this, make_selector().begin()}; }
+    iterator end() { return {*this, make_selector().end()}; }
+
+
+
+
+    // ========================================================================
+    class const_iterator
+    {
+    public:
+        using difference_type = std::ptrdiff_t;
+        using value_type = const double;
+        using pointer = const double*;
+        using reference = const double&;
+        using iterator_category = std::forward_iterator_tag;
+
+        const_iterator(const ndarray<rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        const_iterator& operator++() { it.operator++(); return *this; }
+        const_iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
+        bool operator==(const_iterator other) const { return array.is(other.array) && it == other.it; }
+        bool operator!=(const_iterator other) const { return array.is(other.array) && it != other.it; }
+        const double& operator*() const { return array.data->operator[](array.offset_absolute(*it)); }
+    private:
+        typename selector<rank>::iterator it;
+        const ndarray<rank>& array;
+    };
+
+    const_iterator begin() const { return {*this, make_selector().begin()}; }
+    const_iterator end() const { return {*this, make_selector().end()}; }
 
 
 
@@ -434,6 +514,19 @@ private:
     {
         return selector<rank>{count, start, final};
     }
+
+    // std::vector<double> copy_selection(selector<rank> sel)
+    // {
+    //     auto d = std::make_shared<std::vector<double>>(sel.size());
+    //     auto a = d->begin();
+    //     auto b = begin();
+    //     
+    //     for ( ; a != d->end(); ++a, ++b)
+    //     {
+    //         *a = *b;
+    //     }
+    //     return d;
+    // }
 
     template <int R = rank, typename std::enable_if_t<R == 0>* = nullptr>
     static std::array<int, rank> compute_strides(std::array<int, rank> count)
