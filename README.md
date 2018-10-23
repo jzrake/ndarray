@@ -45,3 +45,14 @@ This project is an experimental, header-only implementation of a numpy-inspired 
   }
   auto vector_data = std::vector<double>(A[50].begin(), A[50].end());
 ```
+
+
+# Priority To-Do items:
+- [ ] Generalize scalar data type from double
+- [ ] Arithmetic operations
+- [ ] Strided memory access
+- [ ] Relative indexing (negative counts backwards from end)
+- [ ] Array transpose (and general axis permutation)
+- [ ] Constructors from `std::initializer_list` of `ndarray<rank - 1>`
+- [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
+- [ ] Binary serialization
