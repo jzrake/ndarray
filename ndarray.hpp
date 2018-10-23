@@ -291,6 +291,18 @@ public:
         return make_selector().shape();
     }
 
+    bool contiguous() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (start[n] != 0 || final[n] != count[n] || skips[n] != 1)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
 
 
 
@@ -320,22 +332,17 @@ public:
         return data->operator[](offset_relative({index...}));
     }
 
+    template<typename... Index>
+    auto select(Index... index)
+    {
+        auto S = make_selector().select(index...);
+        return ndarray<S.rank>(S, data);
+    }
+
     operator double() const
     {
         static_assert(rank == 0, "can only convert rank-0 array to scalar value");
         return data->operator[](scalar_offset);
-    }
-
-    bool contiguous() const
-    {
-        for (int n = 0; n < rank; ++n)
-        {
-            if (start[n] != 0 || final[n] != count[n] || skips[n] != 1)
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
     bool is(const ndarray<rank>& other) const
@@ -347,6 +354,16 @@ public:
         && skips == other.skips
         && strides == other.strides
         && data == other.data);
+    }
+
+    ndarray<rank> copy() const
+    {
+        return {shape(), std::make_shared<std::vector<double>>(begin(), end())};
+    }
+
+    const std::vector<double>& container() const
+    {
+        return *data;
     }
 
     template<int other_rank>
@@ -362,6 +379,12 @@ public:
     class iterator
     {
     public:
+        using difference_type = std::ptrdiff_t;
+        using value_type = double;
+        using pointer = double*;
+        using reference = double&;
+        using iterator_category = std::forward_iterator_tag;
+
         iterator(ndarray<rank> array, typename selector<rank>::iterator it) : array(array), it(it) {}
         iterator& operator++() { it.operator++(); return *this; }
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }

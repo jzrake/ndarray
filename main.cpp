@@ -153,13 +153,14 @@ TEST_CASE("ndarray<1> passes sanity checks", "ndarray")
 {
     auto A = ndarray<1>{0, 1, 2, 3, 4};
     REQUIRE(A.rank == 1);
-
     REQUIRE(A.size() == 5);
     REQUIRE(A.shape() == std::array<int, 1>{5});
     REQUIRE(A(0) == 0);
     REQUIRE(A(4) == 4);
     REQUIRE(A[0] == 0);
     REQUIRE(A[4] == 4);
+    REQUIRE(A.is(A));
+    REQUIRE(! A.copy().is(A));
 }
 
 
@@ -168,8 +169,52 @@ TEST_CASE("ndarray<1> iterator passes sanity checks", "ndarray::iterator")
     auto A = ndarray<1>{0, 1, 2, 3, 4};
     auto x = 0.0;
 
-    for (auto it = A.begin(); it != A.end(); ++it)
+    REQUIRE(A.begin() == A.begin());
+    REQUIRE(A.begin() != A.end());
+
+    SECTION("conventional iterator works")
     {
-        REQUIRE(*it == x++);
+        for (auto it = A.begin(); it != A.end(); ++it)
+        {
+            REQUIRE(*it == x++);
+        }
+    }
+    SECTION("range-based for loop works")
+    {
+        for (auto y : A)
+        {
+            REQUIRE(y == x++);
+        }
+    }
+}
+
+
+TEST_CASE("ndarray<1> can be sliced, copied, and compared", "ndarray::select")
+{
+    auto A = ndarray<1>{0, 1, 2, 3, 4};
+    auto B = ndarray<1>{0, 1, 2, 3};
+    REQUIRE(B.container() == A.select(std::make_tuple(0, 4)).copy().container());
+}
+
+
+TEST_CASE("ndarray<2> can be sliced, copied, and compared", "ndarray::select")
+{
+    auto A = ndarray<2>(3, 4);
+    auto B = A.select(std::make_tuple(0, 2));
+
+    for (int i = 0; i < A.shape()[0]; ++i)
+    {
+        for (int j = 0; j < A.shape()[1]; ++j)
+        {
+            A(i, j) = i + j;
+        }
+    }
+
+    for (int i = 0; i < B.shape()[0]; ++i)
+    {
+        for (int j = 0; j < B.shape()[1]; ++j)
+        {
+            REQUIRE(A(i, j) == B(i, j));
+        }
     }
 }
