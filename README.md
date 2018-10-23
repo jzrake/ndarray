@@ -4,7 +4,7 @@
 This project is an experimental, header-only implementation of a numpy-inspired ndarray template for pure C++0x. It should be comparable to (but perhaps cleaner and smaller than) Boost.MultiArray.
 
 
-`ndarray` objects use the same memory model as the numpy's `ndarray`. The array itself is a light-weight stack object containing a std::shared_ptr to the allocated memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
+`ndarray` objects use the same memory model as the numpy's `ndarray`. The array itself is a lightweight stack object containing a `std::shared_ptr` to the allocated memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
 
 
 ```C++
