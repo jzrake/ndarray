@@ -67,3 +67,31 @@ TEST_CASE("selector<2> subset is created properly from a selector<2>", "selector
     REQUIRE(S.within(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {2, 0}, {4, 12}});
     REQUIRE(S.within(std::make_tuple(2, 8)).reset().within(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {4, 0}, {6, 12}});
 }
+
+
+TEST_CASE("scalar ndarray (ndarray<0>) passes sanity checks", "ndarray")
+{
+    auto A = ndarray<0>(3.14);
+    REQUIRE(A.rank == 0);
+    REQUIRE(A() == 3.14);
+    REQUIRE(A == 3.14);
+
+    A() = 2.0;
+
+    REQUIRE(A() == 2.0);
+    REQUIRE(A == 2.0);
+}
+
+
+TEST_CASE("ndarray<1> passes sanity checks", "ndarray")
+{
+    auto A = ndarray<1>{0, 1, 2, 3, 4};
+    REQUIRE(A.rank == 1);
+
+    REQUIRE(A.size() == 5);
+    REQUIRE(A.shape() == std::array<int, 1>{5});
+    REQUIRE(A(0) == 0);
+    REQUIRE(A(4) == 4);
+    REQUIRE(A[0] == 0);
+    REQUIRE(A[4] == 4);
+}
