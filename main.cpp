@@ -275,6 +275,17 @@ TEST_CASE("ndarray<2> can be sliced, indexed, and copied const-correctly", "ndar
     REQUIRE(D.is(A));
 }
 
+TEST_CASE("ndarray<2> can be sliced and assigned to", "ndarray")
+{
+    auto A = ndarray<2>(10, 10);
+    auto B = ndarray<1>(10);
+
+    B = 1.0;
+    A[0] = B; // ASSIGNMENT TO SLICES NOT YET IMPLEMENTED
+
+    REQUIRE(B(0) == 1.0);
+    REQUIRE(A(0, 0) == 1.0);
+}
 
 TEST_CASE("ndarray<3> can be default-constructed and scalar-assigned properly", "ndarray")
 {
@@ -320,4 +331,13 @@ TEST_CASE("ndarray<2> works with basic arithmetic operations", "ndarray")
     SECTION("-= ndarray works") { A -= A; REQUIRE(A(5, 5) == 0.0); }
     SECTION("*= ndarray works") { A *= A; REQUIRE(A(5, 5) == 4.0); }
     SECTION("/= ndarray works") { A /= A; REQUIRE(A(5, 5) == 1.0); }
+}
+
+
+TEST_CASE("ndarray<2> can be created by stacking 1D arrays", "ndarray::stack factories")
+{
+    auto A = ndarray<1>(100);
+    auto B = ndarray<2>::stack({A, A, A});
+    REQUIRE(B.shape() == std::array<int, 2>{3, 100});
+    REQUIRE(false); // STACK FACTORY NOT IMPLEMENTED
 }

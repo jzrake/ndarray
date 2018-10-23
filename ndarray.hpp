@@ -244,6 +244,7 @@ public:
     enum { rank = Rank };
 
 
+
     /**
      * Constructors
      * 
@@ -357,6 +358,39 @@ public:
             a = value;
         }
         return *this;
+    }
+
+
+
+
+    /**
+     * Factories
+     * 
+     */
+    // ========================================================================
+    static ndarray<rank> stack(std::initializer_list<ndarray<rank - 1>> arrays)
+    {
+        if (arrays.size() == 0)
+        {
+            return ndarray<rank>();            
+        }
+
+        auto required_shape = arrays.begin()->shape();
+
+        std::array<int, rank> dim_sizes;
+        dim_sizes[0] = arrays.size();
+
+        for (int n = 1; n < rank; ++n)
+        {
+            dim_sizes[n] = required_shape[n - 1];
+        }
+        auto A = ndarray<rank>(dim_sizes);
+
+        for (const auto& array : arrays)
+        {
+            
+        }
+        return A;
     }
 
 
@@ -583,6 +617,7 @@ public:
     ndarray<rank> operator-(const ndarray<rank>& other) const { return binary_op<std::minus     <double>, rank>::perform(*this, other); }
     ndarray<rank> operator*(const ndarray<rank>& other) const { return binary_op<std::multiplies<double>, rank>::perform(*this, other); }
     ndarray<rank> operator/(const ndarray<rank>& other) const { return binary_op<std::divides   <double>, rank>::perform(*this, other); }
+
 
 
 private:
