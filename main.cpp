@@ -60,12 +60,78 @@ TEST_CASE("selector<2> subset collapses properly to selector<1>", "[selector::co
 }
 
 
-TEST_CASE("selector<2> subset is created properly from a selector<2>", "selector::within")
+TEST_CASE("selector<2> subset is created properly from a selector<2>", "selector::select")
 {
     auto S = selector<2>{{10, 12}, {0, 0}, {10, 12}};
-    REQUIRE(S.within(std::make_tuple(0, 10)).reset() == S);
-    REQUIRE(S.within(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {2, 0}, {4, 12}});
-    REQUIRE(S.within(std::make_tuple(2, 8)).reset().within(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {4, 0}, {6, 12}});
+    REQUIRE(S.select(std::make_tuple(0, 10)).reset() == S);
+    REQUIRE(S.select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {2, 0}, {4, 12}});
+    REQUIRE(S.select(std::make_tuple(2, 8)).reset().select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {4, 0}, {6, 12}});
+}
+
+
+TEST_CASE("selector<1> next advances properly", "[selector::next]")
+{
+    auto S = selector<1>{{10}, {0}, {10}};
+    auto I = std::array<int, 1>{0};
+    auto i = 0;
+
+    do {
+        REQUIRE(i == I[0]);
+        ++i;
+    } while (S.next(I));
+}
+
+
+TEST_CASE("selector<2> next advances properly", "[selector::next]")
+{
+    auto S = selector<2>{{10, 10}, {0, 0}, {10, 10}};
+    auto I = std::array<int, 2>{0, 0};
+    auto i = 0;
+    auto j = 0;
+
+    do {
+        REQUIRE(i == I[0]);
+        REQUIRE(j == I[1]);
+
+        if (++j == 10)
+        {
+            j = 0;
+            ++i;
+        }
+    } while (S.next(I));
+}
+
+
+TEST_CASE("selector<2> subset next advances properly", "[selector::next]")
+{
+    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}};
+    auto I = std::array<int, 2>{2, 4};
+    auto i = 2;
+    auto j = 4;
+
+    do {
+        REQUIRE(i == I[0]);
+        REQUIRE(j == I[1]);
+
+        if (++j == 6)
+        {
+            j = 4;
+            ++i;
+        }
+    } while (S.next(I));
+}
+
+
+TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterator]")
+{
+    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}};
+    auto I = S.start;
+
+    for (auto index : S)
+    {
+        REQUIRE(index == I);
+        S.next(I);
+    }
 }
 
 
@@ -94,4 +160,16 @@ TEST_CASE("ndarray<1> passes sanity checks", "ndarray")
     REQUIRE(A(4) == 4);
     REQUIRE(A[0] == 0);
     REQUIRE(A[4] == 4);
+}
+
+
+TEST_CASE("ndarray<1> iterator passes sanity checks", "ndarray::iterator")
+{
+    auto A = ndarray<1>{0, 1, 2, 3, 4};
+    auto x = 0.0;
+
+    for (auto it = A.begin(); it != A.end(); ++it)
+    {
+        REQUIRE(*it == x++);
+    }
 }

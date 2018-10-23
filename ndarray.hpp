@@ -16,8 +16,8 @@ struct selector
 
 
     /**
-     * Collapse this selector at the given index, creating a selector with
-     * rank reduced by 1, and which operates on the same axis.
+        Collapse this selector at the given index, creating a selector with
+        rank reduced by 1, and which operates on the same axis.
      */
     selector<rank - 1, axis> collapse(int start_index) const
     {
@@ -49,12 +49,18 @@ struct selector
         return {_count, _start, _final};
     }
 
-    selector<rank - 1, axis> within(int start_index) const
+    /**
+        Alias for the collapse function.
+     */
+    selector<rank - 1, axis> select(int start_index) const
     {
         return collapse(start_index);
     }
 
-    selector<rank, axis + 1> within(std::tuple<int, int> range) const
+    /**
+        Return a subset of this selector by specifying a range on each axis.
+     */
+    selector<rank, axis + 1> select(std::tuple<int, int> range) const
     {
         static_assert(axis < rank, "selector: attempting to index on axis >= rank");
 
@@ -68,17 +74,27 @@ struct selector
         return {_count, _start, _final};
     }
 
+    /**
+        Return a selector of same or smaller rank, applying the collapse or select
+        operators sequentially to each axis.
+     */
     template<typename First, typename... Rest>
-    auto within(First first, Rest... rest) const
+    auto select(First first, Rest... rest) const
     {
-        return within(first).within(rest...);
+        return select(first).select(rest...);
     }
 
+    /**
+        Return a selector covering the same sub-space but operating on axis 0.
+     */
     selector<rank> reset() const
     {
         return selector<rank>{count, start, final};
     }
 
+    /**
+        Return the shape of the sub-space covered by this selector.
+     */
     std::array<int, rank> shape() const
     {
         std::array<int, rank> s;
@@ -90,6 +106,9 @@ struct selector
         return s;
     }
 
+    /**
+        Return the number of elements in the sub-space covered by this selector.
+     */
     int size() const
     {
         auto s = shape();
@@ -105,6 +124,46 @@ struct selector
     {
         return ! operator==(other);
     }
+
+    bool next(std::array<int, rank>& index) const
+    {
+        int n = rank - 1;
+
+        ++index[n];
+
+        while (index[n] == final[n])
+        {
+            if (n == 0)
+            {
+                index = final;
+                return false;
+            }
+            index[n] = start[n];
+            ++index[--n];
+        }
+        return true;
+    }
+
+
+
+
+    // ========================================================================
+    class iterator
+    {
+    public:
+        iterator(selector<rank> sel, std::array<int, rank> ind) : sel(sel), ind(ind) {}
+        iterator& operator++() { sel.next(ind); return *this; }
+        iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
+        bool operator==(iterator other) const { return ind == other.ind; }
+        bool operator!=(iterator other) const { return ind != other.ind; }
+        const std::array<int, rank>& operator*() const { return ind; }
+    private:
+        std::array<int, rank> ind;
+        selector<rank> sel;
+    };
+
+    iterator begin() const { return {reset(), start}; }
+    iterator end() const { return {reset(), final}; }
 
 
 
@@ -243,7 +302,7 @@ public:
     template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
     ndarray<rank - 1> operator[](int index)
     {
-        return ndarray<0>(offset({index}), data);
+        return ndarray<0>(offset_relative({index}), data);
     }
 
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
@@ -258,7 +317,7 @@ public:
         static_assert(sizeof...(index) == rank,
           "Number of arguments to ndarray::operator() must match rank");
 
-        return data->operator[](offset({index...}));
+        return data->operator[](offset_relative({index...}));
     }
 
     operator double() const
@@ -279,6 +338,17 @@ public:
         return true;
     }
 
+    bool is(const ndarray<rank>& other) const
+    {
+        return (scalar_offset == other.scalar_offset
+        && count == other.count
+        && start == other.start
+        && final == other.final
+        && skips == other.skips
+        && strides == other.strides
+        && data == other.data);
+    }
+
     template<int other_rank>
     bool shares(const ndarray<other_rank>& other) const
     {
@@ -288,19 +358,51 @@ public:
 
 
 
+    // ========================================================================
+    class iterator
+    {
+    public:
+        iterator(ndarray<rank> array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        iterator& operator++() { it.operator++(); return *this; }
+        iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
+        bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
+        bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
+        double operator*() { return array.offset_absolute(*it); }
+    private:
+        typename selector<rank>::iterator it;
+        ndarray<rank> array;
+    };
+
+    iterator begin() const { return {*this, make_selector().begin()}; }
+    iterator end() const { return {*this, make_selector().end()}; }
+
+
+
+
 private:
     /**
-     * Pivate utility methods
+     * Private utility methods
      * 
      */
     // ========================================================================
-    int offset(std::array<int, rank> index) const
+    int offset_relative(std::array<int, rank> index) const
     {
         int m = scalar_offset;
 
         for (int n = 0; n < rank; ++n)
         {
             m += start[n] + skips[n] * index[n] * strides[n];
+        }
+        return m;
+    }
+
+    int offset_absolute(std::array<int, rank> index) const
+    {
+        int m = scalar_offset;
+
+        for (int n = 0; n < rank; ++n)
+        {
+            m += index[n] * strides[n];
         }
         return m;
     }
@@ -342,7 +444,8 @@ private:
 
 
 
-    /** Data members
+    /**
+     * Data members
      *
      */
     // ========================================================================
@@ -357,9 +460,11 @@ private:
 
 
 
-    /** Grant friendship to ndarray's of other ranks.
+    /**
+     * Grant friendship to ndarray's of other ranks.
      *
      */
     template<int other_rank>
     friend class ndarray;
+    friend class iterator;
 };
