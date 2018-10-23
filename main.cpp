@@ -266,10 +266,31 @@ TEST_CASE("ndarray<2> can be sliced, indexed, and copied const-correctly", "ndar
     ndarray<1> B = Ac[0];
     ndarray<2> C = Ac;
     ndarray<2> D = A;
+
     REQUIRE(Ac(0, 0) == B(0));
     REQUIRE(Ac(0, 1) == B(1));
     REQUIRE(! B.shares(Ac));
     REQUIRE(! C.shares(Ac));
     REQUIRE(D.shares(A));
+    REQUIRE(D.is(A));
+}
+
+
+TEST_CASE("ndarray<3> can be default-constructed and scalar-assigned properly", "ndarray")
+{
+    ndarray<2> A(10, 10);   
+    ndarray<2> D;
+
+    REQUIRE(! A.empty());
+    REQUIRE(D.empty());
+
+    D = ndarray<2>(10, 10);
+    D = 2.0;
+
+    REQUIRE(D.size() == A.size());
+    REQUIRE(! D.is(A));
+    REQUIRE(D(5, 5) == 2.0);
+
+    D = A;
     REQUIRE(D.is(A));
 }

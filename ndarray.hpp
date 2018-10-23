@@ -259,6 +259,10 @@ public:
     {
     }
 
+    ndarray() : ndarray(constant_array<int, rank>(0))
+    {
+    }
+
     ndarray(std::array<int, rank> dim_sizes)
     : count(dim_sizes)
     , start(constant_array<int, rank>(0))
@@ -299,6 +303,23 @@ public:
 
 
     /**
+     * Assignment operators
+     * 
+     */
+    // ========================================================================
+    ndarray<rank>& operator=(double value)
+    {
+        for (auto& a : *this)
+        {
+            a = value;
+        }
+        return *this;
+    }
+
+
+
+
+    /**
      * Shape and size query methods
      * 
      */
@@ -307,9 +328,22 @@ public:
     {
         return make_selector().size();
     }
+
     std::array<int, rank> shape() const
     {
         return make_selector().shape();
+    }
+
+    bool empty() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (count[n] == 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     bool contiguous() const
@@ -514,19 +548,6 @@ private:
     {
         return selector<rank>{count, start, final};
     }
-
-    // std::vector<double> copy_selection(selector<rank> sel)
-    // {
-    //     auto d = std::make_shared<std::vector<double>>(sel.size());
-    //     auto a = d->begin();
-    //     auto b = begin();
-    //     
-    //     for ( ; a != d->end(); ++a, ++b)
-    //     {
-    //         *a = *b;
-    //     }
-    //     return d;
-    // }
 
     template <int R = rank, typename std::enable_if_t<R == 0>* = nullptr>
     static std::array<int, rank> compute_strides(std::array<int, rank> count)
