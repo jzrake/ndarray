@@ -278,7 +278,7 @@ TEST_CASE("ndarray<2> can be sliced, indexed, and copied const-correctly", "ndar
 
 TEST_CASE("ndarray<3> can be default-constructed and scalar-assigned properly", "ndarray")
 {
-    ndarray<2> A(10, 10);   
+    ndarray<2> A(10, 10);
     ndarray<2> D;
 
     REQUIRE(! A.empty());
@@ -293,4 +293,31 @@ TEST_CASE("ndarray<3> can be default-constructed and scalar-assigned properly", 
 
     D = A;
     REQUIRE(D.is(A));
+}
+
+
+TEST_CASE("ndarray<2> works with basic arithmetic operations", "ndarray")
+{
+    ndarray<2> A(10, 10);
+    A = 2.0;
+
+    REQUIRE((A + 1.0)(5, 5) == 3.0);
+    REQUIRE((A - 1.0)(5, 5) == 1.0);
+    REQUIRE((A * 2.0)(5, 5) == 4.0);
+    REQUIRE((A / 2.0)(5, 5) == 1.0);
+
+    REQUIRE((A + A)(5, 5) == 4.0);
+    REQUIRE((A - A)(5, 5) == 0.0);
+    REQUIRE((A * A)(5, 5) == 4.0);
+    REQUIRE((A / A)(5, 5) == 1.0);
+
+    SECTION("+= scalar works") { A += 1.0; REQUIRE(A(5, 5) == 3.0); }
+    SECTION("-= scalar works") { A -= 1.0; REQUIRE(A(5, 5) == 1.0); }
+    SECTION("*= scalar works") { A *= 2.0; REQUIRE(A(5, 5) == 4.0); }
+    SECTION("/= scalar works") { A /= 2.0; REQUIRE(A(5, 5) == 1.0); }
+
+    SECTION("+= ndarray works") { A += A; REQUIRE(A(5, 5) == 4.0); }
+    SECTION("-= ndarray works") { A -= A; REQUIRE(A(5, 5) == 0.0); }
+    SECTION("*= ndarray works") { A *= A; REQUIRE(A(5, 5) == 4.0); }
+    SECTION("/= ndarray works") { A /= A; REQUIRE(A(5, 5) == 1.0); }
 }

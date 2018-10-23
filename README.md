@@ -1,9 +1,10 @@
 # ndarray
 
 
-
 This project is an experimental, header-only implementation of a numpy-inspired ndarray template for pure C++0x. It should be comparable to (but perhaps cleaner and smaller than) Boost.MultiArray.
 
+
+`ndarray` objects use the same memory model as the numpy's `ndarray`. The array itself is a light-weight stack object containing a std::shared_ptr to the allocated memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
 
 
 ```C++
@@ -18,6 +19,7 @@ This project is an experimental, header-only implementation of a numpy-inspired 
   double f = A(0, 0, 0); // e == f
 ```
 
+
 ```C++
   // Creating a 1D array from an initializer list
 
@@ -26,12 +28,14 @@ This project is an experimental, header-only implementation of a numpy-inspired 
   A(1) = 2.0;
 ```
 
+
 ```C++
   // Multi-dimensional selections
 
   auto A = ndarray<3>(100, 200, 10);
   auto B = A.select(0, std::make_tuple(100, 150), 0); // A.rank == 1; A.shares(B);
 ```
+
 
 ```C++
   // STL-compatible iteration
@@ -47,10 +51,20 @@ This project is an experimental, header-only implementation of a numpy-inspired 
 ```
 
 
+```C++
+  // Respects const-correctness
+
+  const ndarray<1> A(100); // ! A[0].shares(A);
+  // A(0) = 1.0; // compile error
+  ndarray<1> B = A; // ! B.is(A);
+```
+
+
 # Priority To-Do items:
 - [ ] Generalize scalar data type from double
-- [ ] Arithmetic operations
+- [x] Basic arithmetic operations
 - [ ] Strided memory access
+- [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
 - [ ] Constructors from `std::initializer_list` of `ndarray<rank - 1>`

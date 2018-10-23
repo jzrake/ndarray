@@ -7,6 +7,14 @@
 
 
 // ============================================================================
+template<int Rank, int Axis> struct selector;
+template<typename Op, int Rank> class binary_operation;
+template<int Rank> class ndarray;
+
+
+
+
+// ============================================================================
 template<int Rank, int Axis=0>
 struct selector
 {
@@ -186,6 +194,41 @@ struct selector
     std::array<int, rank> count;
     std::array<int, rank> start;
     std::array<int, rank> final;
+};
+
+
+
+
+// ============================================================================
+template<typename Op, int Rank>
+struct binary_op
+{
+    static ndarray<Rank> perform(const ndarray<Rank>& A, const ndarray<Rank>& B)
+    {
+        assert(A.shape() == B.shape());
+
+        auto op = Op();
+        auto C = ndarray<Rank>(A.shape());
+        auto a = A.begin();
+        auto b = B.begin();
+        auto c = C.begin();
+
+        for (; a != A.end(); ++a, ++b, ++c)
+            *c = op(*a, *b);
+
+        return C;
+    }
+    static void perform(ndarray<Rank>& A, const ndarray<Rank>& B)
+    {
+        assert(A.shape() == B.shape());
+
+        auto op = Op();
+        auto a = A.begin();
+        auto b = B.begin();
+
+        for (; a != A.end(); ++a, ++b)
+            *a = op(*a, *b);
+    }
 };
 
 
@@ -514,6 +557,32 @@ public:
     const_iterator end() const { return {*this, make_selector().end()}; }
 
 
+
+
+    /**
+     * Arithmetic operations
+     * 
+     */
+    // ========================================================================
+    ndarray<rank>& operator+=(double value) { for (auto& a : *this) { a += value; } return *this; }
+    ndarray<rank>& operator-=(double value) { for (auto& a : *this) { a -= value; } return *this; }
+    ndarray<rank>& operator*=(double value) { for (auto& a : *this) { a *= value; } return *this; }
+    ndarray<rank>& operator/=(double value) { for (auto& a : *this) { a /= value; } return *this; }
+
+    ndarray<rank>& operator+=(const ndarray<rank>& other) { binary_op<std::plus      <double>, rank>::perform(*this, other); return *this; }
+    ndarray<rank>& operator-=(const ndarray<rank>& other) { binary_op<std::minus     <double>, rank>::perform(*this, other); return *this; }
+    ndarray<rank>& operator*=(const ndarray<rank>& other) { binary_op<std::multiplies<double>, rank>::perform(*this, other); return *this; }
+    ndarray<rank>& operator/=(const ndarray<rank>& other) { binary_op<std::divides   <double>, rank>::perform(*this, other); return *this; }
+
+    ndarray<rank> operator+(double value) const { auto A = copy(); for (auto& a : A) { a += value; } return A; }
+    ndarray<rank> operator-(double value) const { auto A = copy(); for (auto& a : A) { a -= value; } return A; }
+    ndarray<rank> operator*(double value) const { auto A = copy(); for (auto& a : A) { a *= value; } return A; }
+    ndarray<rank> operator/(double value) const { auto A = copy(); for (auto& a : A) { a /= value; } return A; }
+
+    ndarray<rank> operator+(const ndarray<rank>& other) const { return binary_op<std::plus      <double>, rank>::perform(*this, other); }
+    ndarray<rank> operator-(const ndarray<rank>& other) const { return binary_op<std::minus     <double>, rank>::perform(*this, other); }
+    ndarray<rank> operator*(const ndarray<rank>& other) const { return binary_op<std::multiplies<double>, rank>::perform(*this, other); }
+    ndarray<rank> operator/(const ndarray<rank>& other) const { return binary_op<std::divides   <double>, rank>::perform(*this, other); }
 
 
 private:
