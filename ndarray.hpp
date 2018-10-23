@@ -12,6 +12,10 @@ struct selector
 {
     enum { rank = Rank, axis = Axis };
 
+    /**
+     * Collapse this selector at the given index, creating a selector with
+     * rank reduced by 1, and which operates on the same axis.
+     */
     selector<rank - 1, axis> collapse(int start_index) const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
@@ -36,8 +40,8 @@ struct selector
         }
 
         _count[axis] = count[axis] * count[axis + 1];
-        _start[axis] = count[axis] * start_index;
-        _final[axis] = count[axis] * start_index + count[axis + 1];
+        _start[axis] = count[axis] * start[axis] + start[axis + 1] + start_index;
+        _final[axis] = count[axis] * start[axis] + final[axis + 1];
 
         return {_count, _start, _final};
     }
@@ -67,6 +71,11 @@ struct selector
         return within(first).within(rest...);
     }
 
+    selector<rank> reset() const
+    {
+        return selector<rank>{count, start, final};
+    }
+
     std::array<int, rank> shape() const
     {
         std::array<int, rank> s;
@@ -82,6 +91,16 @@ struct selector
     {
         auto s = shape();
         return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+    }
+
+    bool operator==(const selector<rank, axis>& other) const
+    {
+        return count == other.count && start == other.start && final == other.final;
+    }
+
+    bool operator!=(const selector<rank, axis>& other) const
+    {
+        return ! operator==(other);
     }
 
     std::array<int, rank> count;
