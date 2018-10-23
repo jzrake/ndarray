@@ -27,13 +27,42 @@ void test_selector()
 void test_ndarray()
 {
     {
+        // auto A = ndarray<1>(2);
+        // std::cout << &A(1) - &A(0) << std::endl;
+        // std::cout << &A[1]() - &A(0) << std::endl;
+    }
+    {
+        auto A = ndarray<2>(3, 2);
+        std::cout << &A(1, 1) - &A(0, 0) << std::endl;
+        std::cout << &A[1](1) - &A(0, 0) << std::endl;
+        std::cout << &A[1][1]() - &A(0, 0) << std::endl;
+    }
+    {
         auto A = ndarray<5>(3, 4, 5, 6, 7);
-        std::cout <<  &A(0, 0, 0, 0, 1) - &A(0, 0, 0, 0, 0) << std::endl;
-        std::cout <<  &A[0](0, 0, 0, 1) - &A(0, 0, 0, 0, 0) << std::endl;
-        std::cout <<  &A[0][0](0, 0, 1) - &A(0, 0, 0, 0, 0) << std::endl;
-        std::cout <<  &A[0][0][0](0, 1) - &A(0, 0, 0, 0, 0) << std::endl;
-        std::cout <<  &A[0][0][0][0](1) - &A(0, 0, 0, 0, 0) << std::endl;
-        std::cout <<  &A[0][0][0][0][1]() - &A(0, 0, 0, 0, 0) << std::endl;
+        assert(&A(0, 0, 0, 0, 1) - &A(0, 0, 0, 0, 0) == 1);
+        assert(&A[0](0, 0, 0, 1) - &A(0, 0, 0, 0, 0) == 1);
+        assert(&A[0][0](0, 0, 1) - &A(0, 0, 0, 0, 0) == 1);
+        assert(&A[0][0][0](0, 1) - &A(0, 0, 0, 0, 0) == 1);
+        assert(&A[0][0][0][0](1) - &A(0, 0, 0, 0, 0) == 1);
+        assert(&A[0][0][0][0][1]() - &A(0, 0, 0, 0, 0) == 1);
+
+        // std::cout << &A(1, 1, 1, 1, 1) - &A(0, 0, 0, 0, 0) << std::endl;
+        // std::cout << &A[1](1, 1, 1, 1) - &A(0, 0, 0, 0, 0) << std::endl;
+        // std::cout << &A[1][1](1, 1, 1) - &A(0, 0, 0, 0, 0) << std::endl;
+        // std::cout << &A[1][1][1](1, 1) - &A(0, 0, 0, 0, 0) << std::endl;
+        // std::cout << &A[1][1][1][1](1) - &A(0, 0, 0, 0, 0) << std::endl;
+        // std::cout << &A[1][1][1][1][1]() - &A(0, 0, 0, 0, 0) << std::endl;
+
+        // assert(A.size() == 2520);
+    }
+    {
+        auto A = ndarray<5>(3, 4, 5, 6, 7);
+        A(0, 0, 0, 0, 0) = 2;
+        A(1, 0, 2, 3, 4) = 10234;
+        A(2, 1, 0, 2, 5) = 21025;
+
+        assert(A(1, 0, 2, 3, 4) == 10234);
+        assert(A(2, 1, 0, 2, 5) == 21025);
     }
     {
         auto A = ndarray<0>();

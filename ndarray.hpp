@@ -97,11 +97,19 @@ template<int rank>
 class ndarray
 {
 public:
+
+
+
+
+    /**
+     * Constructors
+     * 
+     */
     // ========================================================================
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
-    ndarray()
+    ndarray(double value=0.0)
     : scalar_offset(0)
-    , data(std::make_shared<std::vector<double>>(1))
+    , data(std::make_shared<std::vector<double>>(1, value))
     {
     }
 
@@ -169,9 +177,28 @@ public:
 
 
 
-
+    /**
+     * Shape and size query methods
+     * 
+     */
     // ========================================================================
+    int size() const
+    {
+        return make_selector().size();
+    }
+    int shape() const
+    {
+        return make_selector().shape();
+    }
 
+
+
+
+    /**
+     * Data accessors and selection methods
+     * 
+     */
+    // ========================================================================
     template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
     ndarray<rank - 1> operator[](int index)
     {
@@ -181,20 +208,11 @@ public:
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
     ndarray<rank - 1> operator[](int index)
     {
-        return ndarray<rank - 1>(selector<rank>{count, start, final}.collapse(index), data);
+        return {make_selector().collapse(index), data};
     }
 
     template<typename... Index>
     double& operator()(Index... index)
-    {
-        static_assert(sizeof...(index) == rank,
-          "Number of arguments to ndarray::operator() must match rank");
-
-        return data->operator[](offset({index...}));
-    }
-
-    template<typename... Index>
-    const double& operator()(Index... index) const
     {
         static_assert(sizeof...(index) == rank,
           "Number of arguments to ndarray::operator() must match rank");
@@ -227,11 +245,14 @@ public:
     }
 
 
+
+
 private:
     /**
-     * Private methods
+     * Pivate utility methods
      * 
      */
+    // ========================================================================
     int offset(std::array<int, rank> index) const
     {
         int m = scalar_offset;
@@ -255,6 +276,11 @@ private:
         return s;
     }
 
+    selector<rank> make_selector() const
+    {
+        return selector<rank>{count, start, final};
+    }
+
     template<typename T, int length>
     static std::array<T, length> constant_array(T value)
     {
@@ -270,14 +296,12 @@ private:
     }
 
 
-    /** Grants friendship to ndarrays of all other ranks.
-     */
-    template<int other_rank>
-    friend class ndarray;
 
 
     /** Data members
+     *
      */
+    // ========================================================================
     int scalar_offset = 0;
     std::array<int, rank> count;
     std::array<int, rank> start;
@@ -285,6 +309,15 @@ private:
     std::array<int, rank> skips;
     std::array<int, rank> strides;
     std::shared_ptr<std::vector<double>> data;
+
+
+
+
+    /** Grant friendship to ndarray's of other ranks.
+     *
+     */
+    template<int other_rank>
+    friend class ndarray;
 };
 
 
