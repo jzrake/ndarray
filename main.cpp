@@ -189,6 +189,26 @@ TEST_CASE("ndarray<1> iterator passes sanity checks", "ndarray::iterator")
 }
 
 
+TEST_CASE("ndarray<3> can be sliced, iterated on, and loaded into std::vector", "ndarray::iterator")
+{
+    auto A = ndarray<3>(10, 30, 2);
+
+    for (auto& a : A[5])
+    {
+        a = 5.0;
+    }
+
+    auto vector_data = std::vector<double>(A[5].begin(), A[5].end());
+
+    REQUIRE(vector_data.size() == A[5].size());
+
+    for (auto d : vector_data)
+    {
+        REQUIRE(d == 5.0);
+    }
+}
+
+
 TEST_CASE("ndarray<1> can be sliced, copied, and compared", "ndarray::select")
 {
     auto A = ndarray<1>{0, 1, 2, 3, 4};

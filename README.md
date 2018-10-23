@@ -13,7 +13,7 @@ This project is an experimental, header-only implementation of a numpy-inspired 
   ndarray<2> B = A[0]; // B.shape() == {200, 10}; B.shares(A);
   ndarray<1> C = B[0]; // C.shape() == {10}; C.shares(B);
   ndarray<0> D = C[0]; // D.shape() == {}; D.shares(C);
-  double d = D; // rank-0 arrays cast to underlying
+  double d = D; // rank-0 arrays cast to underlying scalar type
   double e = A[0][0][0]; // d == e
   double f = A(0, 0, 0); // e == f
 ```
