@@ -30,17 +30,19 @@ struct selector
     selector<rank - 1, axis> collapse(int start_index) const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
-        static_assert(axis < rank, "selector: attempting to index on axis >= rank");
+        static_assert(axis < rank - 1, "selector: cannot collapse final axis");
 
         std::array<int, rank - 1> _count;
         std::array<int, rank - 1> _start;
         std::array<int, rank - 1> _final;
+        std::array<int, rank - 1> _skips;
 
         for (int n = 0; n < axis; ++n)
         {
             _count[n] = count[n];
             _start[n] = start[n];
             _final[n] = final[n];
+            _skips[n] = skips[n];
         }
 
         for (int n = axis + 1; n < rank - 1; ++n)
@@ -48,13 +50,15 @@ struct selector
             _count[n] = count[n + 1];
             _start[n] = start[n + 1];
             _final[n] = final[n + 1];
+            _skips[n] = final[n + 1];
         }
 
         _count[axis] = count[axis] * count[axis + 1];
         _start[axis] = count[axis] * start[axis] + start[axis + 1] + start_index * count[axis + 1];
         _final[axis] = count[axis] * start[axis] + final[axis + 1] + start_index * count[axis + 1];
+        _skips[axis] = 1;
 
-        return {_count, _start, _final};
+        return {_count, _start, _final, _skips};
     }
 
     /**
@@ -75,11 +79,12 @@ struct selector
         auto _count = count;
         auto _start = start;
         auto _final = final;
+        auto _skips = skips;
 
         _start[axis] = start[axis] + std::get<0>(range);
         _final[axis] = start[axis] + std::get<1>(range);
 
-        return {_count, _start, _final};
+        return {_count, _start, _final, _skips};
     }
 
     /**
@@ -93,11 +98,20 @@ struct selector
     }
 
     /**
+        Return a selector covering the same sub-space but operating on the given axis.
+    */
+    template<int other_axis>
+    selector<rank, other_axis> on()
+    {
+        return {count, start, final, skips};
+    }
+
+    /**
         Return a selector covering the same sub-space but operating on axis 0.
      */
     selector<rank> reset() const
     {
-        return selector<rank>{count, start, final};
+        return {count, start, final, skips};
     }
 
     /**
@@ -125,19 +139,25 @@ struct selector
 
     bool operator==(const selector<rank, axis>& other) const
     {
-        return count == other.count && start == other.start && final == other.final;
+        return count == other.count &&
+        start == other.start &&
+        final == other.final &&
+        skips == other.skips;
     }
 
     bool operator!=(const selector<rank, axis>& other) const
     {
-        return ! operator==(other);
+        return count != other.count ||
+        start != other.start ||
+        final != other.final ||
+        skips != other.skips;
     }
 
     bool next(std::array<int, rank>& index) const
     {
         int n = rank - 1;
 
-        ++index[n];
+        index[n] += skips[n];
 
         while (index[n] == final[n])
         {
@@ -150,17 +170,6 @@ struct selector
             ++index[--n];
         }
         return true;
-    }
-
-    /**
-        Return another selector for the same rank, axis, and shape, but with
-        start = 0 and count = shape.
-     */
-    selector<rank, axis> normalize() const
-    {
-        auto origin = start;
-        for (auto& si : origin) si = 0;
-        return {count, origin, count};
     }
 
 
@@ -194,6 +203,7 @@ struct selector
     std::array<int, rank> count;
     std::array<int, rank> start;
     std::array<int, rank> final;
+    std::array<int, rank> skips;
 };
 
 
@@ -688,7 +698,7 @@ private:
 
     selector<rank> make_selector() const
     {
-        return selector<rank>{count, start, final};
+        return selector<rank>{count, start, final, skips};
     }
 
     template <int R = rank, typename std::enable_if_t<R == 0>* = nullptr>

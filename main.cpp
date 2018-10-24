@@ -8,7 +8,7 @@
 // ============================================================================
 TEST_CASE("selector<4> passes basic sanity checks", "[selector]")
 {
-    auto S = selector<4>{{4, 3, 2, 3}, {0, 0, 0, 0}, {4, 3, 2, 3}};
+    auto S = selector<4>{{4, 3, 2, 3}, {0, 0, 0, 0}, {4, 3, 2, 3}, {1, 1, 1, 1}};
 
     REQUIRE(S.axis == 0);
     REQUIRE(S.count == std::array<int, 4>{4, 3, 2, 3});
@@ -18,7 +18,7 @@ TEST_CASE("selector<4> passes basic sanity checks", "[selector]")
 
 TEST_CASE("selector<1> works when instantiated as a subset", "[selector]")
 {
-    auto S = selector<1>{{10}, {2}, {8}};
+    auto S = selector<1>{{10}, {2}, {8}, {1}};
 
     REQUIRE(S.axis == 0);
     REQUIRE(S.count == std::array<int, 1>{10});
@@ -28,7 +28,7 @@ TEST_CASE("selector<1> works when instantiated as a subset", "[selector]")
 
 TEST_CASE("selector<2> works when instantiated as a subset", "[selector]")
 {
-    auto S = selector<2>{{10, 12}, {2, 4}, {8, 6}};
+    auto S = selector<2>{{10, 12}, {2, 4}, {8, 6}, {1, 1}};
 
     REQUIRE(S.axis == 0);
     REQUIRE(S.count == std::array<int, 2>{10, 12});
@@ -39,7 +39,7 @@ TEST_CASE("selector<2> works when instantiated as a subset", "[selector]")
 
 TEST_CASE("selector<2> collapses properly to selector<1>", "[selector::collapse]")
 {
-    auto S = selector<2>{{10, 12}, {0, 0}, {10, 12}};
+    auto S = selector<2>{{10, 12}, {0, 0}, {10, 12}, {1, 1}};
 
     REQUIRE(S.collapse(0).axis == 0);
     REQUIRE(S.collapse(0).count == std::array<int, 1>{120});
@@ -50,7 +50,7 @@ TEST_CASE("selector<2> collapses properly to selector<1>", "[selector::collapse]
 
 TEST_CASE("selector<2> subset collapses properly to selector<1>", "[selector::collapse]")
 {
-    auto S = selector<2>{{10, 12}, {2, 4}, {8, 6}};
+    auto S = selector<2>{{10, 12}, {2, 4}, {8, 6}, {1, 1}};
 
     REQUIRE(S.collapse(0).axis == 0);
     REQUIRE(S.collapse(0).count == std::array<int, 1>{120});
@@ -74,16 +74,16 @@ TEST_CASE("selector<2> subset collapses properly to selector<1>", "[selector::co
 
 TEST_CASE("selector<2> subset is created properly from a selector<2>", "[selector::select]")
 {
-    auto S = selector<2>{{10, 12}, {0, 0}, {10, 12}};
+    auto S = selector<2>{{10, 12}, {0, 0}, {10, 12}, {1, 1}};
     REQUIRE(S.select(std::make_tuple(0, 10)).reset() == S);
-    REQUIRE(S.select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {2, 0}, {4, 12}});
-    REQUIRE(S.select(std::make_tuple(2, 8)).reset().select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {4, 0}, {6, 12}});
+    REQUIRE(S.select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {2, 0}, {4, 12}, {1, 1}});
+    REQUIRE(S.select(std::make_tuple(2, 8)).reset().select(std::make_tuple(2, 4)).reset() == selector<2>{{10, 12}, {4, 0}, {6, 12}, {1, 1}});
 }
 
 
 TEST_CASE("selector<1> next advances properly", "[selector::next]")
 {
-    auto S = selector<1>{{10}, {0}, {10}};
+    auto S = selector<1>{{10}, {0}, {10}, {1}};
     auto I = std::array<int, 1>{0};
     auto i = 0;
 
@@ -96,7 +96,7 @@ TEST_CASE("selector<1> next advances properly", "[selector::next]")
 
 TEST_CASE("selector<2> next advances properly", "[selector::next]")
 {
-    auto S = selector<2>{{10, 10}, {0, 0}, {10, 10}};
+    auto S = selector<2>{{10, 10}, {0, 0}, {10, 10}, {1, 1}};
     auto I = std::array<int, 2>{0, 0};
     auto i = 0;
     auto j = 0;
@@ -116,7 +116,7 @@ TEST_CASE("selector<2> next advances properly", "[selector::next]")
 
 TEST_CASE("selector<2> subset next advances properly", "[selector::next]")
 {
-    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}};
+    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}, {1, 1}};
     auto I = std::array<int, 2>{2, 4};
     auto i = 2;
     auto j = 4;
@@ -136,7 +136,7 @@ TEST_CASE("selector<2> subset next advances properly", "[selector::next]")
 
 TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterator]")
 {
-    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}};
+    auto S = selector<2>{{10, 10}, {2, 4}, {8, 6}, {1, 1}};
     auto I = S.start;
 
     for (auto index : S)
@@ -218,11 +218,31 @@ TEST_CASE("ndarray<3> can be sliced, iterated on, and loaded into std::vector", 
     {
         REQUIRE(d == 5.0);
     }
+}
+
+
+TEST_CASE("ndarray<3> can be sliced on all dimensions (except last)", "[ndarray::select]")
+{
+    auto I = [] (auto i, auto j) { return std::make_tuple(i, j); };
+    auto A = ndarray<3>(10, 30, 2);
 
     for (int i = 0; i < A.shape()[0]; ++i)
     {
-        //REQUIRE(A[i].shape() == std::array<int, 2>{30, 2});    
-        //std::cout << A[i].shape()[0] << std::endl;
+        REQUIRE(A[i].shape() == std::array<int, 2>{30, 2});
+        REQUIRE(A.select(0, I(0, 30), I(0, 2)).shape() == std::array<int, 2>{30, 2});
+    }
+
+    for (int j = 0; j < A.shape()[1]; ++j)
+    {
+        REQUIRE(A.select(I(0, 10),  0, I(0, 2)).shape() == std::array<int, 2>{10, 2});
+        REQUIRE(A.select(I(0, 10),  1, I(0, 2)).shape() == std::array<int, 2>{10, 2});
+        REQUIRE(A.select(I(0, 10), 29, I(0, 2)).shape() == std::array<int, 2>{10, 2});
+    }
+
+    for (int k = 0; k < A.shape()[2]; ++k)
+    {
+        // REQUIRE(A.select(I(0, 10), I(0, 30), 0).shape() == std::array<int, 2>{10, 30});
+        // REQUIRE(A.select(I(0, 10), I(0, 30), 1).shape() == std::array<int, 2>{10, 30});
     }
 }
 
@@ -293,6 +313,7 @@ TEST_CASE("ndarray<2> can be sliced, indexed, and copied const-correctly", "[nda
     REQUIRE(D.is(A));
 }
 
+
 TEST_CASE("ndarray<2> can be sliced and assigned to", "[ndarray]")
 {
     auto A = ndarray<2>(10, 10);
@@ -304,6 +325,7 @@ TEST_CASE("ndarray<2> can be sliced and assigned to", "[ndarray]")
     REQUIRE(B(0) == 1.0);
     REQUIRE(A(0, 0) == 1.0);
 }
+
 
 TEST_CASE("ndarray<3> can be default-constructed and scalar-assigned properly", "[ndarray]")
 {
@@ -352,7 +374,7 @@ TEST_CASE("ndarray<2> works with basic arithmetic operations", "[ndarray]")
 }
 
 
-TEST_CASE("ndarray<2> can be created by stacking 1D arrays", "[ndarray::stack factories]")
+TEST_CASE("ndarray<2> can be created by stacking 1D arrays", "[ndarray::stack]")
 {
     auto A = ndarray<1>(100);
     auto B = ndarray<2>::stack({A, A, A});
