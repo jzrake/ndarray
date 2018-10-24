@@ -63,13 +63,28 @@ public:
 
         _count[axis] = count[axis] * count[axis + 1];
         _start[axis] = start[axis] * count[axis + 1] + start[axis + 1];
-        _final[axis] = final[axis] * count[axis + 1] + final[axis + 1];
+        _final[axis] = start[axis] * count[axis + 1] + final[axis + 1];
         _skips[axis] = 1;
 
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> select(int start_index, int final_index, int skips_index) const
+    selector<rank, axis + 1> range(int start_index, int final_index) const
+    {
+        return select(std::make_tuple(start_index, final_index, 1));
+    }
+
+    selector<rank, axis + 1> skip(int skips_index) const
+    {
+        return select(std::make_tuple(start[axis], final[axis], skips_index));
+    }
+
+    selector<rank, axis + 1> slice(int start_index, int final_index, int skips_index) const
+    {
+        return select(std::make_tuple(start_index, final_index, skips_index));
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
     {
         static_assert(axis < rank, "selector: cannot select on axis >= rank");
 
@@ -78,21 +93,27 @@ public:
         auto _final = final;
         auto _skips = skips;
 
-        _start[axis] = start[axis] + start_index;
-        _final[axis] = start[axis] + final_index;
-        _skips[axis] = skips[axis] * skips_index;
+        _start[axis] = start[axis] + std::get<0>(selection);
+        _final[axis] = start[axis] + std::get<1>(selection);
+        _skips[axis] = skips[axis] * std::get<2>(selection);
 
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> range(int start_index, int final_index) const
+    selector<rank, axis + 1> select(std::tuple<int, int> start_final) const
     {
-        return select(start_index, final_index, 1);
+        return range(std::get<0>(start_final), std::get<1>(start_final));
     }
 
-    selector<rank, axis + 1> skip(int skips_index) const
+    auto select(int start_index) const
     {
-        return select(start[axis], final[axis], skips_index);
+        return range(start_index, start_index + 1).reset().collapse();
+    }
+
+    template<typename First, typename... Rest>
+    auto select(First first, Rest... rest) const
+    {
+        return select(first).select(rest...);
     }
 
     template<int new_axis>
@@ -236,8 +257,28 @@ TEST_CASE("selector<3> does construct and compare correctly ", "[selector]")
     auto S = selector<3>(10, 12, 14);
     REQUIRE(S.strides() == std::array<int, 3>{168, 14, 1});
     REQUIRE(S.shape() == std::array<int, 3>{10, 12, 14});
-    REQUIRE(S == S.select(0, 10, 1).on<0>());
-    REQUIRE(S != S.select(0, 10, 2).on<0>());
+    REQUIRE(S == S.select(std::make_tuple(0, 10, 1)).on<0>());
+    REQUIRE(S != S.select(std::make_tuple(0, 10, 2)).on<0>());
+
+
+    REQUIRE(S.select(0).rank == 2);
+    REQUIRE(S.select(0).shape() == std::array<int, 2>{12, 14});
+    REQUIRE(S.select(1).shape() == std::array<int, 2>{12, 14});
+
+    REQUIRE(S.select(0, 0).shape() == std::array<int, 1>{14});
+    REQUIRE(S.select(1, 0).shape() == std::array<int, 1>{14});
+    REQUIRE(S.select(0, 1).shape() == std::array<int, 1>{14});
+
+    REQUIRE(S.select(std::make_tuple(0, 10, 1)).rank == 3);
+    REQUIRE(S.select(std::make_tuple(0, 10, 1), std::make_tuple(0, 10, 1)).rank == 3);
+
+    REQUIRE(S.select(0, std::make_tuple(0, 10, 1), std::make_tuple(0, 10, 1)).rank == 2);
+    REQUIRE(S.select(std::make_tuple(0, 10, 1), 0, std::make_tuple(0, 10, 1)).rank == 2);
+    REQUIRE(S.select(std::make_tuple(0, 10, 1), std::make_tuple(0, 10, 1), 0).rank == 2);
+
+    REQUIRE(S.select(0, std::make_tuple(0, 10, 1), 0).rank == 1);
+    REQUIRE(S.select(0, 0, std::make_tuple(0, 10, 1)).rank == 1);
+    REQUIRE(S.select(std::make_tuple(0, 10, 1), 0, 0).rank == 1);
 }
 
 
@@ -246,12 +287,12 @@ TEST_CASE("selector<3> does collapse operations correctly", "[selector::collapse
     auto S = selector<3>(10, 12, 14);
     REQUIRE(S.on<0>().collapse().strides() == std::array<int, 2>{14, 1});
     REQUIRE(S.on<1>().collapse().strides() == std::array<int, 2>{168, 1});
-    REQUIRE(S.on<0>().select(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
-    REQUIRE(S.on<1>().select(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
-    REQUIRE(S.on<2>().select(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
-    REQUIRE(S.on<0>().select(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
-    REQUIRE(S.on<1>().select(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
-    REQUIRE(S.on<2>().select(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
+    REQUIRE(S.on<0>().slice(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
+    REQUIRE(S.on<1>().slice(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
+    REQUIRE(S.on<2>().slice(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
+    REQUIRE(S.on<0>().slice(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
+    REQUIRE(S.on<1>().slice(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
+    REQUIRE(S.on<2>().slice(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
 
 }
 
@@ -259,12 +300,12 @@ TEST_CASE("selector<3> does collapse operations correctly", "[selector::collapse
 TEST_CASE("selector<3> does select operations correctly", "[selector::select]")
 {
     auto S = selector<3>(10, 12, 14);
-    REQUIRE(S.on<0>().select(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
-    REQUIRE(S.on<1>().select(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
-    REQUIRE(S.on<2>().select(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
-    REQUIRE(S.on<0>().select(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
-    REQUIRE(S.on<1>().select(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
-    REQUIRE(S.on<2>().select(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
+    REQUIRE(S.on<0>().slice(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
+    REQUIRE(S.on<1>().slice(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
+    REQUIRE(S.on<2>().slice(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
+    REQUIRE(S.on<0>().slice(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
+    REQUIRE(S.on<1>().slice(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
+    REQUIRE(S.on<2>().slice(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
 }
 
 
