@@ -1,4 +1,3 @@
-#define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 #include "ndarray.hpp"
 
@@ -13,6 +12,24 @@ TEST_CASE("selector<4> passes basic sanity checks", "[selector]")
     REQUIRE(S.axis == 0);
     REQUIRE(S.count == std::array<int, 4>{4, 3, 2, 3});
     REQUIRE(S.shape() == S.count);
+}
+
+
+TEST_CASE("selector<4> has correct shape and size if non-contiguous", "[selector]")
+{
+    auto S0 = selector<4>{{4, 3, 8, 5}, {0, 0, 0, 0}, {4, 3, 8, 5}, {1, 1, 1, 1}};
+    auto S1 = selector<4>{{4, 3, 8, 5}, {0, 0, 0, 0}, {4, 3, 8, 5}, {4, 1, 2, 1}};
+    auto S2 = selector<4>{{4, 3, 8, 5}, {0, 0, 0, 0}, {4, 3, 8, 5}, {1, 3, 1, 1}};
+    auto S3 = selector<4>{{4, 3, 8, 5}, {0, 0, 0, 0}, {4, 3, 8, 5}, {1, 3, 1, 2}};
+
+    REQUIRE(S0.size() == 480);
+    REQUIRE(S1.size() == 60);
+    REQUIRE(S2.size() == 160);
+    REQUIRE(S3.size() == 64);
+    REQUIRE(S0.shape() == std::array<int, 4>{4, 3, 8, 5});
+    REQUIRE(S1.shape() == std::array<int, 4>{1, 3, 4, 5});
+    REQUIRE(S2.shape() == std::array<int, 4>{4, 1, 8, 5});
+    REQUIRE(S3.shape() == std::array<int, 4>{4, 1, 8, 2});
 }
 
 
@@ -69,6 +86,36 @@ TEST_CASE("selector<2> subset collapses properly to selector<1>", "[selector::co
     REQUIRE(S.collapse(2).start == std::array<int, 1>{48});
     REQUIRE(S.collapse(2).final == std::array<int, 1>{50});
     REQUIRE(S.collapse(2).size() == 2);
+}
+
+
+TEST_CASE("selector<3> collapses properly to selector<2> on axes 1, 2", "[selector::collapse]")
+{
+    auto S = selector<3>{{10, 12, 14}, {0, 0, 0}, {10, 12, 14}, {1, 1, 1}};
+
+    REQUIRE(S.on<0>().collapse(0).axis == 0);
+    REQUIRE(S.on<0>().collapse(0).count == std::array<int, 2>{10 * 12, 14});
+    REQUIRE(S.on<0>().collapse(0).start == std::array<int, 2>{0, 0});
+    REQUIRE(S.on<0>().collapse(0).final == std::array<int, 2>{12, 14});
+    //REQUIRE(S.on<0>().collapse(0).size() == 12 * 14);
+}
+
+
+TEST_CASE("selector<3> combines properly to selector<2> on axes 1, 2", "[selector::combine]")
+{
+    auto S = selector<3>{{10, 12, 14}, {0, 0, 0}, {10, 12, 14}, {1, 1, 1}};
+
+    REQUIRE(S.on<0>().combine().rank == 2);
+    REQUIRE(S.on<0>().combine().axis == 0);
+    REQUIRE(S.on<0>().combine().count == std::array<int, 2>{10 * 12, 14});
+    REQUIRE(S.on<0>().combine().skips == std::array<int, 2>{1, 1});
+    REQUIRE(S.on<0>().combine().shape() == std::array<int, 2>{10 * 12, 14});
+
+    REQUIRE(S.on<1>().combine().rank == 2);
+    REQUIRE(S.on<1>().combine().axis == 1);
+    REQUIRE(S.on<1>().combine().count == std::array<int, 2>{10, 12 * 14});
+    REQUIRE(S.on<1>().combine().skips == std::array<int, 2>{1, 1});
+    REQUIRE(S.on<1>().combine().shape() == std::array<int, 2>{10, 12 * 14});
 }
 
 

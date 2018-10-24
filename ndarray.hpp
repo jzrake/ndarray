@@ -61,6 +61,40 @@ struct selector
         return {_count, _start, _final, _skips};
     }
 
+    selector<rank - 1, axis> combine() const
+    {
+        static_assert(rank > 0, "selector: cannot combine zero-rank selector");
+        static_assert(axis < rank - 1, "selector: cannot combine final axis");
+
+        std::array<int, rank - 1> _count;
+        std::array<int, rank - 1> _start;
+        std::array<int, rank - 1> _final;
+        std::array<int, rank - 1> _skips;
+
+        for (int n = 0; n < axis; ++n)
+        {
+            _count[n] = count[n];
+            _start[n] = start[n];
+            _final[n] = final[n];
+            _skips[n] = skips[n];
+        }
+
+        for (int n = axis + 1; n < rank - 1; ++n)
+        {
+            _count[n] = count[n + 1];
+            _start[n] = start[n + 1];
+            _final[n] = final[n + 1];
+            _skips[n] = skips[n + 1];
+        }
+
+        _count[axis] = count[axis] * count[axis + 1];
+        _start[axis] = 0;
+        _final[axis] = count[axis] * count[axis + 1];
+        _skips[axis] = skips[axis] * (axis == 0 ? 1 : skips[axis - 1]);
+
+        return {_count, _start, _final, _skips};
+    }
+
     /**
         Alias for the collapse function.
      */
@@ -85,6 +119,11 @@ struct selector
         _final[axis] = start[axis] + std::get<1>(range);
 
         return {_count, _start, _final, _skips};
+    }
+
+    selector<rank, axis + 1> select(int start_index, int final_index) const
+    {
+        return select(std::make_tuple(start_index, final_index));
     }
 
     /**
@@ -123,7 +162,7 @@ struct selector
 
         for (int n = 0; n < rank; ++n)
         {
-            s[n] = final[n] - start[n];
+            s[n] = (final[n] - start[n]) / skips[n];
         }
         return s;
     }
@@ -167,7 +206,10 @@ struct selector
                 return false;
             }
             index[n] = start[n];
-            ++index[--n];
+
+            --n;
+
+            index[n] += skips[n];
         }
         return true;
     }
