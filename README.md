@@ -67,6 +67,6 @@ This project is an experimental, header-only implementation of a numpy-inspired 
 - [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
-- [ ] Constructors from `std::initializer_list` of `ndarray<rank - 1>`
+- [x] Factory: stack from `std::initializer_list` of `ndarray<rank - 1>`
 - [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
 - [ ] Binary serialization

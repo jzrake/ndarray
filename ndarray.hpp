@@ -51,8 +51,8 @@ struct selector
         }
 
         _count[axis] = count[axis] * count[axis + 1];
-        _start[axis] = count[axis] * start[axis] + start[axis + 1] + start_index;
-        _final[axis] = count[axis] * start[axis] + final[axis + 1];
+        _start[axis] = count[axis] * start[axis] + start[axis + 1] + start_index * count[axis + 1];
+        _final[axis] = count[axis] * start[axis] + final[axis + 1] + start_index * count[axis + 1];
 
         return {_count, _start, _final};
     }
@@ -421,10 +421,12 @@ public:
             dim_sizes[n] = required_shape[n - 1];
         }
         auto A = ndarray<rank>(dim_sizes);
+        int n = 0;
 
         for (const auto& array : arrays)
         {
-            
+            A[n] = array;
+            ++n;
         }
         return A;
     }

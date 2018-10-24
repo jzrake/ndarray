@@ -57,6 +57,18 @@ TEST_CASE("selector<2> subset collapses properly to selector<1>", "[selector::co
     REQUIRE(S.collapse(0).start == std::array<int, 1>{24});
     REQUIRE(S.collapse(0).final == std::array<int, 1>{26});
     REQUIRE(S.collapse(0).size() == 2);
+
+    REQUIRE(S.collapse(1).axis == 0);
+    REQUIRE(S.collapse(1).count == std::array<int, 1>{120});
+    REQUIRE(S.collapse(1).start == std::array<int, 1>{36});
+    REQUIRE(S.collapse(1).final == std::array<int, 1>{38});
+    REQUIRE(S.collapse(1).size() == 2);
+
+    REQUIRE(S.collapse(2).axis == 0);
+    REQUIRE(S.collapse(2).count == std::array<int, 1>{120});
+    REQUIRE(S.collapse(2).start == std::array<int, 1>{48});
+    REQUIRE(S.collapse(2).final == std::array<int, 1>{50});
+    REQUIRE(S.collapse(2).size() == 2);
 }
 
 
@@ -206,6 +218,12 @@ TEST_CASE("ndarray<3> can be sliced, iterated on, and loaded into std::vector", 
     {
         REQUIRE(d == 5.0);
     }
+
+    for (int i = 0; i < A.shape()[0]; ++i)
+    {
+        //REQUIRE(A[i].shape() == std::array<int, 2>{30, 2});    
+        //std::cout << A[i].shape()[0] << std::endl;
+    }
 }
 
 
@@ -338,6 +356,5 @@ TEST_CASE("ndarray<2> can be created by stacking 1D arrays", "[ndarray::stack fa
 {
     auto A = ndarray<1>(100);
     auto B = ndarray<2>::stack({A, A, A});
-    //REQUIRE(B.shape() == std::array<int, 2>{3, 100});
-    //REQUIRE(false); // STACK FACTORY NOT IMPLEMENTED
+    REQUIRE(B.shape() == std::array<int, 2>{3, 100});
 }
