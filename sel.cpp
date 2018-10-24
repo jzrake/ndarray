@@ -1,35 +1,30 @@
-#include "catch.hpp"
 #include <array>
 #include <numeric>
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include "catch.hpp"
 
 
 
 
 // ============================================================================
 template<int Rank, int Axis = 0>
-struct selector
+class selector
 {
+public:
+
+
     enum { rank = Rank, axis = Axis };
 
-    selector(
-        std::array<int, rank> count,
-        std::array<int, rank> start,
-        std::array<int, rank> final,
-        std::array<int, rank> skips)
-    : count(count)
-    , start(start)
-    , final(final)
-    , skips(skips)
-    {
-    }
 
+    // ========================================================================
     template<typename... Dims>
     selector(Dims... dims)
     {
-        static_assert(sizeof...(Dims) == rank, "Wrong number of dimension arguments");
+        static_assert(sizeof...(Dims) == rank,
+            "selector: number of count arguments must match rank");
+
         count = {dims...};
 
         for (int n = 0; n < rank; ++n)
@@ -76,6 +71,8 @@ struct selector
 
     selector<rank, axis + 1> select(int start_index, int final_index, int skips_index) const
     {
+        static_assert(axis < rank, "selector: cannot select on axis >= rank");
+
         auto _count = count;
         auto _start = start;
         auto _final = final;
@@ -88,8 +85,23 @@ struct selector
         return {_count, _start, _final, _skips};
     }
 
+    selector<rank, axis + 1> range(int start_index, int final_index) const
+    {
+        return select(start_index, final_index, 1);
+    }
+
+    selector<rank, axis + 1> skip(int skips_index) const
+    {
+        return select(start[axis], final[axis], skips_index);
+    }
+
     template<int new_axis>
     selector<rank, new_axis> on() const
+    {
+        return {count, start, final, skips};
+    }
+
+    selector<rank> reset() const
     {
         return {count, start, final, skips};
     }
@@ -111,34 +123,209 @@ struct selector
         return s;
     }
 
+    std::array<int, rank> shape() const
+    {
+        std::array<int, rank> s;
+
+        for (int n = 0; n < rank; ++n)
+        {
+            s[n] = (final[n] - start[n]) / skips[n];
+        }
+        return s;
+    }
+
+    int size() const
+    {
+        auto s = shape();
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+    }
+
+    bool operator==(const selector<rank, axis>& other) const
+    {
+        return count == other.count &&
+        start == other.start &&
+        final == other.final &&
+        skips == other.skips;
+    }
+
+    bool operator!=(const selector<rank, axis>& other) const
+    {
+        return count != other.count ||
+        start != other.start ||
+        final != other.final ||
+        skips != other.skips;
+    }
+
+    bool next(std::array<int, rank>& index) const
+    {
+        int n = rank - 1;
+
+        index[n] += skips[n];
+
+        while (index[n] == final[n])
+        {
+            if (n == 0)
+            {
+                index = final;
+                return false;
+            }
+            index[n] = start[n];
+
+            --n;
+
+            index[n] += skips[n];
+        }
+        return true;
+    }
+
+
+    // ========================================================================
+    class iterator
+    {
+    public:
+        iterator(selector<rank> sel, std::array<int, rank> ind) : sel(sel), ind(ind) {}
+        iterator& operator++() { sel.next(ind); return *this; }
+        iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
+        bool operator==(iterator other) const { return ind == other.ind; }
+        bool operator!=(iterator other) const { return ind != other.ind; }
+        const std::array<int, rank>& operator*() const { return ind; }
+    private:
+        std::array<int, rank> ind;
+        selector<rank> sel;
+    };
+
+    iterator begin() const { return {reset(), start}; }
+    iterator end() const { return {reset(), final}; }
+
+
+private:
+
+
+    // ========================================================================
+    selector(
+        std::array<int, rank> count,
+        std::array<int, rank> start,
+        std::array<int, rank> final,
+        std::array<int, rank> skips)
+    : count(count)
+    , start(start)
+    , final(final)
+    , skips(skips)
+    {
+    }
+
+
+    // ========================================================================
     std::array<int, rank> count;
     std::array<int, rank> start;
     std::array<int, rank> final;
     std::array<int, rank> skips;
+
+
+    // ========================================================================
+    template<int other_rank, int other_axis>
+    friend class selector;
 };
 
 
 
 
 // ============================================================================
-template <class T, std::size_t N>
-std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
-{
-    std::copy(arr.cbegin(), arr.cend(), std::ostream_iterator<T>(o, " "));
-    return o;
-}
-
-
-
-
-// ============================================================================
-TEST_CASE("selector<3> passes basic sanity checks", "[selector]")
+TEST_CASE("selector<3> does construct and compare correctly ", "[selector]")
 {
     auto S = selector<3>(10, 12, 14);
     REQUIRE(S.strides() == std::array<int, 3>{168, 14, 1});
+    REQUIRE(S.shape() == std::array<int, 3>{10, 12, 14});
+    REQUIRE(S == S.select(0, 10, 1).on<0>());
+    REQUIRE(S != S.select(0, 10, 2).on<0>());
+}
+
+
+TEST_CASE("selector<3> does collapse operations correctly", "[selector::collapse]")
+{
+    auto S = selector<3>(10, 12, 14);
     REQUIRE(S.on<0>().collapse().strides() == std::array<int, 2>{14, 1});
     REQUIRE(S.on<1>().collapse().strides() == std::array<int, 2>{168, 1});
     REQUIRE(S.on<0>().select(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
     REQUIRE(S.on<1>().select(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
     REQUIRE(S.on<2>().select(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
+    REQUIRE(S.on<0>().select(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
+    REQUIRE(S.on<1>().select(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
+    REQUIRE(S.on<2>().select(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
+
+}
+
+
+TEST_CASE("selector<3> does select operations correctly", "[selector::select]")
+{
+    auto S = selector<3>(10, 12, 14);
+    REQUIRE(S.on<0>().select(0, 10, 2).strides() == std::array<int, 3>{336, 14, 1});
+    REQUIRE(S.on<1>().select(0, 12, 2).strides() == std::array<int, 3>{168, 28, 1});
+    REQUIRE(S.on<2>().select(0, 14, 2).strides() == std::array<int, 3>{168, 14, 2});
+    REQUIRE(S.on<0>().select(0, 10, 2).shape() == std::array<int, 3>{5, 12, 14});
+    REQUIRE(S.on<1>().select(0, 12, 2).shape() == std::array<int, 3>{10, 6, 14});
+    REQUIRE(S.on<2>().select(0, 14, 2).shape() == std::array<int, 3>{10, 12, 7});
+}
+
+
+TEST_CASE("selector<1> selects correctly with skip applied multiple times", "[selector::select]")
+{
+    auto S = selector<1>(64);
+
+    REQUIRE(S.skip(2).shape()[0] == 32);
+    REQUIRE(S.skip(2).on<0>().skip(2).shape()[0] == 16);
+    REQUIRE(S.skip(2).on<0>().skip(2).on<0>().skip(2).shape()[0] == 8);
+}
+
+
+TEST_CASE("selector<4> skips on all dimensions correctly", "[selector::select]")
+{
+    auto S = selector<4>(2, 4, 6, 8);
+    REQUIRE(S.skip(2).skip(4).skip(6).skip(8).size() == 1);
+}
+
+
+TEST_CASE("selector<1> next advances properly", "[selector::next]")
+{
+    auto S = selector<1>(10);
+    auto I = std::array<int, 1>{0};
+    auto i = 0;
+
+    do {
+        REQUIRE(i == I[0]);
+        ++i;
+    } while (S.next(I));
+}
+
+
+TEST_CASE("selector<2> next advances properly", "[selector::next]")
+{
+    auto S = selector<2>(10, 10);
+    auto I = std::array<int, 2>{0, 0};
+    auto i = 0;
+    auto j = 0;
+
+    do {
+        REQUIRE(i == I[0]);
+        REQUIRE(j == I[1]);
+
+        if (++j == 10)
+        {
+            j = 0;
+            ++i;
+        }
+    } while (S.next(I));
+}
+
+
+TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterator]")
+{
+    auto S = selector<2>(10, 10).range(2, 8).range(4, 6);    
+    auto I = std::array<int, 2>{2, 4};
+
+    for (auto index : S)
+    {
+        REQUIRE(index == I);
+        S.next(I);
+    }
 }
