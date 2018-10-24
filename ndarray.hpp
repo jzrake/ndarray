@@ -250,16 +250,6 @@ public:
      * 
      */
     // ========================================================================
-    ndarray(const ndarray<rank>& other)
-    {
-        *this = other.copy();
-    }
-
-    ndarray(ndarray<rank>& other)
-    {
-        *this = other;
-    }
-
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
     ndarray(double value=double())
     : scalar_offset(0)
@@ -343,6 +333,22 @@ public:
         assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
     }
 
+    ndarray(const ndarray<rank>& other)
+    : count(other.shape())
+    , start(constant_array<int, rank>(0))
+    , final(other.shape())
+    , skips(constant_array<int, rank>(1))
+    , strides(compute_strides(count))
+    , data(std::make_shared<std::vector<double>>(size()))
+    {
+        *this = other;
+    }
+
+    ndarray(ndarray<rank>& other)
+    {
+        become(other);
+    }
+
 
 
 
@@ -358,6 +364,36 @@ public:
             a = value;
         }
         return *this;
+    }
+
+    ndarray<rank>& operator=(const ndarray<rank>& other)
+    {
+        assert(shape() == other.shape());
+
+        auto a = this->begin();
+        auto b = other.begin();
+
+        for (; a != end(); ++a, ++b)
+        {
+            *a = *b;
+        }
+        return *this;
+    }
+
+    void become(const ndarray<rank>& other)
+    {
+        count = other.count;
+        start = other.start;
+        final = other.final;
+        skips = other.skips;
+        strides = other.strides;
+        data = other.data;
+    }
+
+    template<typename... Sizes>
+    void resize(Sizes... sizes)
+    {
+        become(ndarray<rank>(sizes...));
     }
 
 
