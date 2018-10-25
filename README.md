@@ -63,7 +63,7 @@ This project is an experimental, header-only implementation of a numpy-inspired 
 # Priority To-Do items:
 - [ ] Generalize scalar data type from double
 - [x] Basic arithmetic operations
-- [ ] Strided memory access
+- [/] Strided memory access
 - [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
