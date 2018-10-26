@@ -15,7 +15,7 @@ The code should be transparent enough that you can modify it without much troubl
 
 # Overview
 
-`ndarray` objects use the same memory model as the numpy's `ndarray`. The array itself is a lightweight stack object containing a `std::shared_ptr` to the allocated memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
+`ndarray` objects use the same memory model as `np.array` in numpy. The array itself is a lightweight stack object containing a `std::shared_ptr` to a memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
 
 
 ```C++
