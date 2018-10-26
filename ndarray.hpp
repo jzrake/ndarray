@@ -19,15 +19,18 @@
 
 
 // ============================================================================
-template<typename Op, int Rank> class binary_operation;
-template<int Rank> class ndarray;
+namespace nd
+{
+    template<typename Op, int Rank> class binary_op;
+    template<int Rank> class ndarray;
+}
 
 
 
 
 // ============================================================================
 template<typename Op, int Rank>
-struct binary_op
+struct nd::binary_op
 {
     static ndarray<Rank> perform(const ndarray<Rank>& A, const ndarray<Rank>& B)
     {
@@ -62,7 +65,7 @@ struct binary_op
 
 // ============================================================================
 template<int Rank>
-class ndarray
+class nd::ndarray
 {
 public:
 
@@ -262,15 +265,29 @@ public:
     }
 
     template<typename... Sizes>
+    static ndarray<rank> ones(Sizes... sizes)
+    {
+        auto A = ndarray<rank>(sizes...);
+        auto x = double();
+        for (auto& a : A) a = 1;
+        return A;
+    }
+
+    template<typename... Sizes>
+    static ndarray<rank> zeros(Sizes... sizes)
+    {
+        auto A = ndarray<rank>(sizes...);
+        auto x = double();
+        for (auto& a : A) a = 0;
+        return A;
+    }
+
+    template<typename... Sizes>
     static ndarray<rank> arange(Sizes... sizes)
     {
         auto A = ndarray<rank>(sizes...);
         auto x = double();
-
-        for (auto& a : A)
-        {
-            a = x++;
-        }
+        for (auto& a : A) a = x++;
         return A;
     }
 

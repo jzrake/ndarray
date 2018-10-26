@@ -4,7 +4,7 @@
 
 int main()
 {
-    ndarray<1> A(10);
+    nd::ndarray<1> A(10);
 
     for (int i = 0; i < A.size(); ++i)
     {
@@ -12,7 +12,7 @@ int main()
     }
 
     auto str = A.dumps();
-    auto B = ndarray<1>::loads(str);
+    auto B = nd::ndarray<1>::loads(str);
 
     for (int i = 0; i < B.size(); ++i)
     {

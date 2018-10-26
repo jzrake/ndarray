@@ -4,10 +4,13 @@
 This project is an experimental, header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_68_0/libs/multi_array/doc/index.html).
 
 
-If you are interested in a fully-featured and professionally maintained header-only numeric array package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
+If you are interested in a featureful and professionally maintained numerical package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
 
 
-If instead, you are interested in a dependency-free, single-header-file that gives you an `ndarray` container and not much else, this project might interest you.
+If you just wanted a lightweight `ndarray` container and not much else, this project might interest you.
+
+
+The code should be transparent enough that you can modify it without much trouble. Pull requests welcome!
 
 
 # Overview
@@ -23,8 +26,8 @@ If instead, you are interested in a dependency-free, single-header-file that giv
   ndarray<1> C = B[0]; // C.shape() == {10}; C.shares(B);
   ndarray<0> D = C[0]; // D.shape() == {}; D.shares(C);
   double d = D; // rank-0 arrays cast to underlying scalar type
-  double e = A[0][0][0]; // d == e
-  double f = A(0, 0, 0); // e == f
+  double e = A[0][0][0]; // d == e (slow)
+  double f = A(0, 0, 0); // e == f (fast)
 ```
 
 
@@ -62,9 +65,28 @@ If instead, you are interested in a dependency-free, single-header-file that giv
 ```C++
   // Respects const-correctness
 
-  const ndarray<1> A(100); // ! A[0].shares(A);
-  // A(0) = 1.0; // compile error
-  ndarray<1> B = A; // ! B.is(A);
+  // If A is non-const, then
+  {
+    ndarray<1> A(100); // A[0].shares(A);
+    A(0) = 1.0; // OK
+    ndarray<1> B = A; // B.is(A);
+  }
+
+  // whereas if A is const,
+  {
+    const ndarray<1> A(100); // ! A[0].shares(A);
+    // A(0) = 1.0; // compile error
+    ndarray<1> B = A; // ! B.is(A);
+  }
+```
+
+
+```C++
+  // Basic arithmetic expressions
+
+  auto A = ndarray<1>::arange(10);
+  auto B = ndarray<1>::ones(10);
+  auto C = (A + B) / 2.0;
 ```
 
 
@@ -75,6 +97,8 @@ If instead, you are interested in a dependency-free, single-header-file that giv
 - [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
-- [x] Factory: stack from `std::initializer_list` of `ndarray<rank - 1>`
+- [x] Factories: zeros, ones, arange
 - [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
 - [x] Binary serialization
+- [x] Enable/disable use of C++ exceptions at compile time
+- [ ] Enable/disable bounds-checking at compile time

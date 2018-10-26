@@ -7,8 +7,17 @@
 
 
 // ============================================================================
+namespace nd
+{
+    template<int Rank, int Axis> struct selector;
+}
+
+
+
+
+// ============================================================================
 template<int Rank, int Axis = 0>
-struct selector
+struct nd::selector
 {
 
 
@@ -277,6 +286,7 @@ struct selector
 // ============================================================================
 #ifdef TEST_SELECTOR
 #include "catch.hpp"
+using namespace nd;
 
 
 TEST_CASE("selector<3> does construct and compare correctly", "[selector]")
