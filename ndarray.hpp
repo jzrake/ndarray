@@ -9,7 +9,16 @@
 
 
 // ============================================================================
-// template<int Rank, int Axis> struct selector;
+#ifndef NDARRAY_NO_EXCEPTIONS
+#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) throw std::invalid_argument(message); } while(0)
+#else
+#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) std::terminate(); } while(0)
+#endif
+
+
+
+
+// ============================================================================
 template<typename Op, int Rank> class binary_operation;
 template<int Rank> class ndarray;
 
@@ -103,7 +112,7 @@ public:
     : count(selector.count)
     , start(selector.start)
     , final(selector.final)
-    , skips(constant_array<int, rank>(1))
+    , skips(selector.skips)
     , strides(compute_strides(count))
     , data(data)
     {
@@ -131,7 +140,9 @@ public:
     , strides(compute_strides(count))
     , data(data)
     {
-        assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
+        NDARRAY_ASSERT_VALID_ARGUMENT(
+            data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
+            "Size of data buffer is not the product of dim sizes");
     }
 
     ndarray(
@@ -146,7 +157,9 @@ public:
     , strides(compute_strides(count))
     , data(data)
     {
-        assert(data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()));
+        NDARRAY_ASSERT_VALID_ARGUMENT(
+            data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
+            "Size of data buffer is not the product of dim sizes");
     }
 
     ndarray(const ndarray<rank>& other)
@@ -184,7 +197,8 @@ public:
 
     ndarray<rank>& operator=(const ndarray<rank>& other)
     {
-        assert(shape() == other.shape());
+        NDARRAY_ASSERT_VALID_ARGUMENT(shape() == other.shape(),
+            "assignment from ndarray of incompatible shape");
 
         auto a = this->begin();
         auto b = other.begin();
@@ -196,7 +210,7 @@ public:
         return *this;
     }
 
-    void become(const ndarray<rank>& other)
+    void become(ndarray<rank>& other)
     {
         count = other.count;
         start = other.start;
@@ -206,11 +220,11 @@ public:
         data = other.data;
     }
 
-    template<typename... Sizes>
-    void resize(Sizes... sizes)
-    {
-        become(ndarray<rank>(sizes...));
-    }
+    // template<typename... Sizes>
+    // void resize(Sizes... sizes)
+    // {
+    //     become(ndarray<rank>(sizes...));
+    // }
 
 
 
@@ -243,6 +257,19 @@ public:
         {
             A[n] = array;
             ++n;
+        }
+        return A;
+    }
+
+    template<typename... Sizes>
+    static ndarray<rank> arange(Sizes... sizes)
+    {
+        auto A = ndarray<rank>(sizes...);
+        auto x = double();
+
+        for (auto& a : A)
+        {
+            a = x++;
         }
         return A;
     }
@@ -512,23 +539,24 @@ public:
         auto R = int();
         auto S = constant_array<int, rank>(0);
 
-        assert(it + sizeof(R) <= str.end());
+        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(R) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&R, &*it, sizeof(R));
         it += sizeof(R);
 
-        assert(it + sizeof(S) <= str.end());
+        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(S) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&S, &*it, sizeof(S));
         it += sizeof(S);
 
+        NDARRAY_ASSERT_VALID_ARGUMENT(R == rank, "ndarray string has the wrong rank");
+
         while (it != str.end())
         {
-            assert(it + sizeof(T) <= str.end());
+            NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(T) <= str.end(), "unexpected end of ndarray data string");
             std::memcpy(&x, &*it, sizeof(T));
             data->push_back(x);
             it += sizeof(T);
         }
 
-        assert(R == rank);
         return {S, data};
     }
 
@@ -575,10 +603,11 @@ private:
     template <int R = rank, typename std::enable_if_t<R != 0>* = nullptr>
     static std::array<int, rank> compute_strides(std::array<int, rank> count)
     {
-        std::array<int, rank> s;   
-        std::partial_sum(count.rbegin(), count.rend() - 1, s.rbegin() + 1, std::multiplies<>());
-        s[rank - 1] = 1;
-        return s;
+        return selector<rank>(
+            count,
+            constant_array<int, rank>(0),
+            count,
+            constant_array<int, rank>(1)).strides();
     }
 
     template<typename T, int length>
@@ -633,8 +662,85 @@ private:
 
 TEST_CASE("ndarray can be constructed ", "[ndarray]")
 {
-    ndarray<1> A(1);
-    CHECK(A.size() == 1);
+    SECTION("trivial construction works OK")
+    {
+        REQUIRE(ndarray<1>(1).size() == 1);
+        REQUIRE(ndarray<1>(1).shape() == std::array<int, 1>{1});
+        REQUIRE(ndarray<1>().empty());
+        REQUIRE_FALSE(ndarray<1>(1).empty());
+    }
+
+    SECTION("ndarray constructor throws if the data buffer has the wrong size")
+    {
+        auto data_good = std::make_shared<std::vector<double>>(1);
+        auto data_bad  = std::make_shared<std::vector<double>>(2);
+        REQUIRE_NOTHROW(ndarray<1>({1}, data_good));
+        REQUIRE_THROWS_AS(ndarray<1>({1}, data_bad), std::invalid_argument);
+    }
+}
+
+
+TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]")
+{
+    SECTION("1d arange works correctly")
+    {
+        auto A = ndarray<1>::arange(10);
+        auto x = double();
+
+        REQUIRE(A.size() == 10);
+        REQUIRE(A.shape()[0] == 10);
+
+        for (const auto& a : A)
+        {
+            REQUIRE(a == x++);
+        }
+    }
+
+    SECTION("2d arange works correctly")
+    {
+        auto A = ndarray<2>::arange(10, 10);
+        auto x = double();
+
+        REQUIRE(A.size() == 100);
+        REQUIRE(A.shape()[0] == 10);
+        REQUIRE(A.shape()[1] == 10);
+
+        for (const auto& a : A)
+        {
+            REQUIRE(a == x++);
+        }
+    }
+}
+
+
+TEST_CASE("ndarray selection works correctly", "[ndarray] [select]")
+{
+    auto A = ndarray<2>(3, 4);
+    auto B0 = A.select(std::make_tuple(0, 3), 0);
+    auto B1 = A.select(0, std::make_tuple(0, 4));
+
+    REQUIRE(B0.shape() == std::array<int, 1>{3});
+    REQUIRE(B1.shape() == std::array<int, 1>{4});
+    REQUIRE_FALSE(B0.contiguous());
+    REQUIRE_FALSE(B1.contiguous());
+}
+
+
+TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [serialize]")
+{
+    SECTION("ndarray can be serialized and loaded")
+    {
+        REQUIRE(ndarray<1>::loads(ndarray<1>::arange(10).dumps()).size() == 10);
+        REQUIRE(ndarray<2>::loads(ndarray<2>::arange(10, 9).dumps()).size() == 10 * 9);
+        REQUIRE(ndarray<3>::loads(ndarray<3>::arange(10, 9, 8).dumps()).size() == 10 * 9 * 8);
+    }
+
+    SECTION("narray throws if attempting to load from invalid string")
+    {
+        REQUIRE_THROWS_AS(ndarray<1>::loads(""), std::invalid_argument);
+        REQUIRE_THROWS_AS(ndarray<1>::loads(ndarray<1>::arange(10).dumps() + "1234"), std::invalid_argument);
+        REQUIRE_THROWS_AS(ndarray<1>::loads(ndarray<1>::arange(10).dumps() + "12345678"), std::invalid_argument);
+    }
 }
 
 
