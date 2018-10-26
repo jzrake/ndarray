@@ -21,23 +21,23 @@
 // ============================================================================
 namespace nd
 {
-    template<typename Op, int Rank> class binary_op;
-    template<int Rank> class ndarray;
+    template<typename T, int Rank, typename Op> class binary_op;
+    template<typename T, int Rank> class ndarray;
 }
 
 
 
 
 // ============================================================================
-template<typename Op, int Rank>
+template<typename T, int Rank, typename Op>
 struct nd::binary_op
 {
-    static ndarray<Rank> perform(const ndarray<Rank>& A, const ndarray<Rank>& B)
+    static ndarray<T, Rank> perform(const ndarray<T, Rank>& A, const ndarray<T, Rank>& B)
     {
         assert(A.shape() == B.shape());
 
         auto op = Op();
-        auto C = ndarray<Rank>(A.shape());
+        auto C = ndarray<T, Rank>(A.shape());
         auto a = A.begin();
         auto b = B.begin();
         auto c = C.begin();
@@ -47,7 +47,7 @@ struct nd::binary_op
 
         return C;
     }
-    static void perform(ndarray<Rank>& A, const ndarray<Rank>& B)
+    static void perform(ndarray<T, Rank>& A, const ndarray<T, Rank>& B)
     {
         assert(A.shape() == B.shape());
 
@@ -64,12 +64,13 @@ struct nd::binary_op
 
 
 // ============================================================================
-template<int Rank>
+template<typename T, int Rank>
 class nd::ndarray
 {
 public:
 
 
+    using data_type = T;
     enum { rank = Rank };
 
 
@@ -79,27 +80,27 @@ public:
      */
     // ========================================================================
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
-    ndarray(double value=double())
+    ndarray(T value=T())
     : scalar_offset(0)
-    , data(std::make_shared<std::vector<double>>(1, value))
+    , data(std::make_shared<std::vector<T>>(1, value))
     {
     }
 
     template<int R = rank, typename = typename std::enable_if<R == 0>::type>
-    ndarray(int scalar_offset, std::shared_ptr<std::vector<double>>& data)
+    ndarray(int scalar_offset, std::shared_ptr<std::vector<T>>& data)
     : scalar_offset(scalar_offset)
     , data(data)
     {
     }
 
     template<int R = rank, typename = typename std::enable_if<R == 1>::type>
-    ndarray(std::initializer_list<double> elements)
+    ndarray(std::initializer_list<T> elements)
     : count({int(elements.size())})
     , start({0})
     , final({int(elements.size())})
     , skips({1})
     , strides({1})
-    , data(std::make_shared<std::vector<double>>(elements.begin(), elements.end()))
+    , data(std::make_shared<std::vector<T>>(elements.begin(), elements.end()))
     {
     }
 
@@ -111,7 +112,7 @@ public:
     }
 
     template<typename SelectorType>
-    ndarray(SelectorType selector, std::shared_ptr<std::vector<double>>& data)
+    ndarray(SelectorType selector, std::shared_ptr<std::vector<T>>& data)
     : count(selector.count)
     , start(selector.start)
     , final(selector.final)
@@ -121,25 +122,25 @@ public:
     {
     }
 
-    ndarray() : ndarray(constant_array<int, rank>(0))
+    ndarray() : ndarray(constant_array<rank>(0))
     {
     }
 
     ndarray(std::array<int, rank> dim_sizes)
     : count(dim_sizes)
-    , start(constant_array<int, rank>(0))
+    , start(constant_array<rank>(0))
     , final(dim_sizes)
-    , skips(constant_array<int, rank>(1))
+    , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(std::make_shared<std::vector<double>>(product(dim_sizes)))
+    , data(std::make_shared<std::vector<T>>(product(dim_sizes)))
     {
     }
 
-    ndarray(std::array<int, rank> dim_sizes, std::shared_ptr<std::vector<double>>& data)
+    ndarray(std::array<int, rank> dim_sizes, std::shared_ptr<std::vector<T>>& data)
     : count(dim_sizes)
-    , start(constant_array<int, rank>(0))
+    , start(constant_array<rank>(0))
     , final(dim_sizes)
-    , skips(constant_array<int, rank>(1))
+    , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
     , data(data)
     {
@@ -152,11 +153,11 @@ public:
         std::array<int, rank> count,
         std::array<int, rank> start,
         std::array<int, rank> final,
-        std::shared_ptr<std::vector<double>>& data)
+        std::shared_ptr<std::vector<T>>& data)
     : count(count)
     , start(start)
     , final(final)
-    , skips(constant_array<int, rank>(1))
+    , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
     , data(data)
     {
@@ -165,18 +166,18 @@ public:
             "Size of data buffer is not the product of dim sizes");
     }
 
-    ndarray(const ndarray<rank>& other)
+    ndarray(const ndarray<T, rank>& other)
     : count(other.shape())
-    , start(constant_array<int, rank>(0))
+    , start(constant_array<rank>(0))
     , final(other.shape())
-    , skips(constant_array<int, rank>(1))
+    , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(std::make_shared<std::vector<double>>(size()))
+    , data(std::make_shared<std::vector<T>>(size()))
     {
         *this = other;
     }
 
-    ndarray(ndarray<rank>& other)
+    ndarray(ndarray<T, rank>& other)
     {
         become(other);
     }
@@ -189,7 +190,7 @@ public:
      * 
      */
     // ========================================================================
-    ndarray<rank>& operator=(double value)
+    ndarray<T, rank>& operator=(T value)
     {
         for (auto& a : *this)
         {
@@ -198,7 +199,7 @@ public:
         return *this;
     }
 
-    ndarray<rank>& operator=(const ndarray<rank>& other)
+    ndarray<T, rank>& operator=(const ndarray<T, rank>& other)
     {
         NDARRAY_ASSERT_VALID_ARGUMENT(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
@@ -213,7 +214,7 @@ public:
         return *this;
     }
 
-    void become(ndarray<rank>& other)
+    void become(ndarray<T, rank>& other)
     {
         count = other.count;
         start = other.start;
@@ -226,7 +227,7 @@ public:
     // template<typename... Sizes>
     // void resize(Sizes... sizes)
     // {
-    //     become(ndarray<rank>(sizes...));
+    //     become(ndarray<T, rank>(sizes...));
     // }
 
 
@@ -237,11 +238,11 @@ public:
      * 
      */
     // ========================================================================
-    static ndarray<rank> stack(std::initializer_list<ndarray<rank - 1>> arrays)
+    static ndarray<T, rank> stack(std::initializer_list<ndarray<T, rank - 1>> arrays)
     {
         if (arrays.size() == 0)
         {
-            return ndarray<rank>();            
+            return ndarray<T, rank>();            
         }
 
         auto required_shape = arrays.begin()->shape();
@@ -253,7 +254,7 @@ public:
         {
             dim_sizes[n] = required_shape[n - 1];
         }
-        auto A = ndarray<rank>(dim_sizes);
+        auto A = ndarray<T, rank>(dim_sizes);
         int n = 0;
 
         for (const auto& array : arrays)
@@ -265,28 +266,28 @@ public:
     }
 
     template<typename... Sizes>
-    static ndarray<rank> ones(Sizes... sizes)
+    static ndarray<T, rank> ones(Sizes... sizes)
     {
-        auto A = ndarray<rank>(sizes...);
-        auto x = double();
+        auto A = ndarray<T, rank>(sizes...);
+        auto x = T();
         for (auto& a : A) a = 1;
         return A;
     }
 
     template<typename... Sizes>
-    static ndarray<rank> zeros(Sizes... sizes)
+    static ndarray<T, rank> zeros(Sizes... sizes)
     {
-        auto A = ndarray<rank>(sizes...);
-        auto x = double();
+        auto A = ndarray<T, rank>(sizes...);
+        auto x = T();
         for (auto& a : A) a = 0;
         return A;
     }
 
     template<typename... Sizes>
-    static ndarray<rank> arange(Sizes... sizes)
+    static ndarray<T, rank> arange(Sizes... sizes)
     {
-        auto A = ndarray<rank>(sizes...);
-        auto x = double();
+        auto A = ndarray<T, rank>(sizes...);
+        auto x = T();
         for (auto& a : A) a = x++;
         return A;
     }
@@ -342,29 +343,29 @@ public:
      */
     // ========================================================================
     template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
-    ndarray<rank - 1> operator[](int index)
+    ndarray<T, rank - 1> operator[](int index)
     {
         return {offset_relative({index}), data};
     }
 
     template <int R = rank, typename std::enable_if_t<R == 1>* = nullptr>
-    ndarray<rank - 1> operator[](int index) const
+    ndarray<T, rank - 1> operator[](int index) const
     {
-        auto d = std::make_shared<std::vector<double>>(1, data->operator[](offset_relative({index})));
+        auto d = std::make_shared<std::vector<T>>(1, data->operator[](offset_relative({index})));
         return {0, d};
     }
 
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
-    ndarray<rank - 1> operator[](int index)
+    ndarray<T, rank - 1> operator[](int index)
     {
         return {make_selector().select(index), data};
     }
 
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
-    ndarray<rank - 1> operator[](int index) const
+    ndarray<T, rank - 1> operator[](int index) const
     {
         auto S = make_selector().collapse(index);
-        auto d = std::make_shared<std::vector<double>>(S.size());
+        auto d = std::make_shared<std::vector<T>>(S.size());
         auto a = d->begin();
         auto b = begin();
 
@@ -376,7 +377,7 @@ public:
     }
 
     template<typename... Index>
-    double& operator()(Index... index)
+    T& operator()(Index... index)
     {
         static_assert(sizeof...(index) == rank,
           "Number of arguments to ndarray::operator() must match rank");
@@ -385,7 +386,7 @@ public:
     }
 
     template<typename... Index>
-    const double& operator()(Index... index) const
+    const T& operator()(Index... index) const
     {
         static_assert(sizeof...(index) == rank,
           "Number of arguments to ndarray::operator() must match rank");
@@ -397,16 +398,16 @@ public:
     auto select(Index... index)
     {
         auto S = make_selector().select(index...);
-        return ndarray<S.rank>(S, data);
+        return ndarray<T, S.rank>(S, data);
     }
 
-    operator double() const
+    operator T() const
     {
         static_assert(rank == 0, "can only convert rank-0 array to scalar value");
         return data->operator[](scalar_offset);
     }
 
-    bool is(const ndarray<rank>& other) const
+    bool is(const ndarray<T, rank>& other) const
     {
         return (scalar_offset == other.scalar_offset
         && count == other.count
@@ -417,19 +418,19 @@ public:
         && data == other.data);
     }
 
-    ndarray<rank> copy() const
+    ndarray<T, rank> copy() const
     {
-        auto d = std::make_shared<std::vector<double>>(begin(), end());
+        auto d = std::make_shared<std::vector<T>>(begin(), end());
         return {shape(), d};
     }
 
-    const std::vector<double>& container() const
+    const std::vector<T>& container() const
     {
         return *data;
     }
 
     template<int other_rank>
-    bool shares(const ndarray<other_rank>& other) const
+    bool shares(const ndarray<T, other_rank>& other) const
     {
         return data == other.data;
     }
@@ -442,20 +443,20 @@ public:
     {
     public:
         using difference_type = std::ptrdiff_t;
-        using value_type = double;
-        using pointer = double*;
-        using reference = double&;
+        using value_type = T;
+        using pointer = T*;
+        using reference = T&;
         using iterator_category = std::forward_iterator_tag;
 
-        iterator(ndarray<rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        iterator(ndarray<T, rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
         iterator& operator++() { it.operator++(); return *this; }
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
-        double& operator*() { return array.data->operator[](array.offset_absolute(*it)); }
+        T& operator*() { return array.data->operator[](array.offset_absolute(*it)); }
     private:
         typename selector<rank>::iterator it;
-        ndarray<rank>& array;
+        ndarray<T, rank>& array;
     };
 
     iterator begin() { return {*this, make_selector().begin()}; }
@@ -469,20 +470,20 @@ public:
     {
     public:
         using difference_type = std::ptrdiff_t;
-        using value_type = const double;
-        using pointer = const double*;
-        using reference = const double&;
+        using value_type = const T;
+        using pointer = const T*;
+        using reference = const T&;
         using iterator_category = std::forward_iterator_tag;
 
-        const_iterator(const ndarray<rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        const_iterator(const ndarray<T, rank>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
         const_iterator& operator++() { it.operator++(); return *this; }
         const_iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
         bool operator==(const_iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(const_iterator other) const { return array.is(other.array) && it != other.it; }
-        const double& operator*() const { return array.data->operator[](array.offset_absolute(*it)); }
+        const T& operator*() const { return array.data->operator[](array.offset_absolute(*it)); }
     private:
         typename selector<rank>::iterator it;
-        const ndarray<rank>& array;
+        const ndarray<T, rank>& array;
     };
 
     const_iterator begin() const { return {*this, make_selector().begin()}; }
@@ -496,25 +497,25 @@ public:
      * 
      */
     // ========================================================================
-    ndarray<rank>& operator+=(double value) { for (auto& a : *this) { a += value; } return *this; }
-    ndarray<rank>& operator-=(double value) { for (auto& a : *this) { a -= value; } return *this; }
-    ndarray<rank>& operator*=(double value) { for (auto& a : *this) { a *= value; } return *this; }
-    ndarray<rank>& operator/=(double value) { for (auto& a : *this) { a /= value; } return *this; }
+    ndarray<T, rank>& operator+=(T value) { for (auto& a : *this) { a += value; } return *this; }
+    ndarray<T, rank>& operator-=(T value) { for (auto& a : *this) { a -= value; } return *this; }
+    ndarray<T, rank>& operator*=(T value) { for (auto& a : *this) { a *= value; } return *this; }
+    ndarray<T, rank>& operator/=(T value) { for (auto& a : *this) { a /= value; } return *this; }
 
-    ndarray<rank>& operator+=(const ndarray<rank>& other) { binary_op<std::plus      <double>, rank>::perform(*this, other); return *this; }
-    ndarray<rank>& operator-=(const ndarray<rank>& other) { binary_op<std::minus     <double>, rank>::perform(*this, other); return *this; }
-    ndarray<rank>& operator*=(const ndarray<rank>& other) { binary_op<std::multiplies<double>, rank>::perform(*this, other); return *this; }
-    ndarray<rank>& operator/=(const ndarray<rank>& other) { binary_op<std::divides   <double>, rank>::perform(*this, other); return *this; }
+    ndarray<T, rank>& operator+=(const ndarray<T, rank>& other) { binary_op<T, rank, std::plus      <T>>::perform(*this, other); return *this; }
+    ndarray<T, rank>& operator-=(const ndarray<T, rank>& other) { binary_op<T, rank, std::minus     <T>>::perform(*this, other); return *this; }
+    ndarray<T, rank>& operator*=(const ndarray<T, rank>& other) { binary_op<T, rank, std::multiplies<T>>::perform(*this, other); return *this; }
+    ndarray<T, rank>& operator/=(const ndarray<T, rank>& other) { binary_op<T, rank, std::divides   <T>>::perform(*this, other); return *this; }
 
-    ndarray<rank> operator+(double value) const { auto A = copy(); for (auto& a : A) { a += value; } return A; }
-    ndarray<rank> operator-(double value) const { auto A = copy(); for (auto& a : A) { a -= value; } return A; }
-    ndarray<rank> operator*(double value) const { auto A = copy(); for (auto& a : A) { a *= value; } return A; }
-    ndarray<rank> operator/(double value) const { auto A = copy(); for (auto& a : A) { a /= value; } return A; }
+    ndarray<T, rank> operator+(T value) const { auto A = copy(); for (auto& a : A) { a += value; } return A; }
+    ndarray<T, rank> operator-(T value) const { auto A = copy(); for (auto& a : A) { a -= value; } return A; }
+    ndarray<T, rank> operator*(T value) const { auto A = copy(); for (auto& a : A) { a *= value; } return A; }
+    ndarray<T, rank> operator/(T value) const { auto A = copy(); for (auto& a : A) { a /= value; } return A; }
 
-    ndarray<rank> operator+(const ndarray<rank>& other) const { return binary_op<std::plus      <double>, rank>::perform(*this, other); }
-    ndarray<rank> operator-(const ndarray<rank>& other) const { return binary_op<std::minus     <double>, rank>::perform(*this, other); }
-    ndarray<rank> operator*(const ndarray<rank>& other) const { return binary_op<std::multiplies<double>, rank>::perform(*this, other); }
-    ndarray<rank> operator/(const ndarray<rank>& other) const { return binary_op<std::divides   <double>, rank>::perform(*this, other); }
+    ndarray<T, rank> operator+(const ndarray<T, rank>& other) const { return binary_op<T, rank, std::plus      <T>>::perform(*this, other); }
+    ndarray<T, rank> operator-(const ndarray<T, rank>& other) const { return binary_op<T, rank, std::minus     <T>>::perform(*this, other); }
+    ndarray<T, rank> operator*(const ndarray<T, rank>& other) const { return binary_op<T, rank, std::multiplies<T>>::perform(*this, other); }
+    ndarray<T, rank> operator/(const ndarray<T, rank>& other) const { return binary_op<T, rank, std::divides   <T>>::perform(*this, other); }
 
 
 
@@ -526,11 +527,11 @@ public:
     // ========================================================================
     std::string dumps() const
     {
+        static_assert(std::is_same<T, double>::value, "Can only serialize double arrays");
+
         // rank  ... 1 int
         // shape ... rank int's
         // data  ... size T's
-
-        using T = double;
 
         auto R = int(rank);
         auto S = shape();
@@ -546,15 +547,15 @@ public:
         return str;
     }
 
-    static ndarray<rank> loads(const std::string& str)
+    static ndarray<T, rank> loads(const std::string& str)
     {
-        using T = double;
+        static_assert(std::is_same<T, double>::value, "Can only serialize double arrays");
 
         auto it = str.begin();
         auto data = std::make_shared<std::vector<T>>();
         auto x = T();
         auto R = int();
-        auto S = constant_array<int, rank>(0);
+        auto S = constant_array<rank>(0);
 
         NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(R) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&R, &*it, sizeof(R));
@@ -622,15 +623,15 @@ private:
     {
         return selector<rank>(
             count,
-            constant_array<int, rank>(0),
+            constant_array<rank>(0),
             count,
-            constant_array<int, rank>(1)).strides();
+            constant_array<rank>(1)).strides();
     }
 
-    template<typename T, int length>
-    static std::array<T, length> constant_array(T value)
+    template<int length>
+    static std::array<int, length> constant_array(T value)
     {
-        std::array<T, length> A;
+        std::array<int, length> A;
         for (auto& a : A) a = value;
         return A;
     }
@@ -655,7 +656,7 @@ private:
     std::array<int, rank> final;
     std::array<int, rank> skips;
     std::array<int, rank> strides;
-    std::shared_ptr<std::vector<double>> data;
+    std::shared_ptr<std::vector<T>> data;
 
 
 
@@ -664,7 +665,7 @@ private:
      * Grant friendship to ndarray's of other ranks.
      *
      */
-    template<int other_rank>
+    template<typename, int>
     friend class ndarray;
     friend class iterator;
 };
@@ -675,24 +676,26 @@ private:
 // ============================================================================
 #ifdef TEST_NDARRAY
 #include "catch.hpp"
+using T = double;
+
 
 
 TEST_CASE("ndarray can be constructed ", "[ndarray]")
 {
     SECTION("trivial construction works OK")
     {
-        REQUIRE(ndarray<1>(1).size() == 1);
-        REQUIRE(ndarray<1>(1).shape() == std::array<int, 1>{1});
-        REQUIRE(ndarray<1>().empty());
-        REQUIRE_FALSE(ndarray<1>(1).empty());
+        REQUIRE(ndarray<T, 1>(1).size() == 1);
+        REQUIRE(ndarray<T, 1>(1).shape() == std::array<int, 1>{1});
+        REQUIRE(ndarray<T, 1>().empty());
+        REQUIRE_FALSE(ndarray<T, 1>(1).empty());
     }
 
     SECTION("ndarray constructor throws if the data buffer has the wrong size")
     {
-        auto data_good = std::make_shared<std::vector<double>>(1);
-        auto data_bad  = std::make_shared<std::vector<double>>(2);
-        REQUIRE_NOTHROW(ndarray<1>({1}, data_good));
-        REQUIRE_THROWS_AS(ndarray<1>({1}, data_bad), std::invalid_argument);
+        auto data_good = std::make_shared<std::vector<T>>(1);
+        auto data_bad  = std::make_shared<std::vector<T>>(2);
+        REQUIRE_NOTHROW(ndarray<T, 1>({1}, data_good));
+        REQUIRE_THROWS_AS((ndarray<T, 1>({1}, data_bad)), std::invalid_argument);
     }
 }
 
@@ -701,8 +704,8 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
 {
     SECTION("1d arange works correctly")
     {
-        auto A = ndarray<1>::arange(10);
-        auto x = double();
+        auto A = ndarray<T, 1>::arange(10);
+        auto x = T();
 
         REQUIRE(A.size() == 10);
         REQUIRE(A.shape()[0] == 10);
@@ -715,8 +718,8 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
 
     SECTION("2d arange works correctly")
     {
-        auto A = ndarray<2>::arange(10, 10);
-        auto x = double();
+        auto A = ndarray<T, 2>::arange(10, 10);
+        auto x = T();
 
         REQUIRE(A.size() == 100);
         REQUIRE(A.shape()[0] == 10);
@@ -732,7 +735,7 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
 
 TEST_CASE("ndarray selection works correctly", "[ndarray] [select]")
 {
-    auto A = ndarray<2>(3, 4);
+    auto A = ndarray<T, 2>(3, 4);
     auto B0 = A.select(std::make_tuple(0, 3), 0);
     auto B1 = A.select(0, std::make_tuple(0, 4));
 
@@ -747,16 +750,16 @@ TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [s
 {
     SECTION("ndarray can be serialized and loaded")
     {
-        REQUIRE(ndarray<1>::loads(ndarray<1>::arange(10).dumps()).size() == 10);
-        REQUIRE(ndarray<2>::loads(ndarray<2>::arange(10, 9).dumps()).size() == 10 * 9);
-        REQUIRE(ndarray<3>::loads(ndarray<3>::arange(10, 9, 8).dumps()).size() == 10 * 9 * 8);
+        REQUIRE(ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps()).size() == 10);
+        REQUIRE(ndarray<T, 2>::loads(ndarray<T, 2>::arange(10, 9).dumps()).size() == 10 * 9);
+        REQUIRE(ndarray<T, 3>::loads(ndarray<T, 3>::arange(10, 9, 8).dumps()).size() == 10 * 9 * 8);
     }
 
     SECTION("narray throws if attempting to load from invalid string")
     {
-        REQUIRE_THROWS_AS(ndarray<1>::loads(""), std::invalid_argument);
-        REQUIRE_THROWS_AS(ndarray<1>::loads(ndarray<1>::arange(10).dumps() + "1234"), std::invalid_argument);
-        REQUIRE_THROWS_AS(ndarray<1>::loads(ndarray<1>::arange(10).dumps() + "12345678"), std::invalid_argument);
+        REQUIRE_THROWS_AS((ndarray<T, 1>::loads("")), std::invalid_argument);
+        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "1234")), std::invalid_argument);
+        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "12345678")), std::invalid_argument);
     }
 }
 

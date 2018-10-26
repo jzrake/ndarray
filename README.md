@@ -91,7 +91,7 @@ The code should be transparent enough that you can modify it without much troubl
 
 
 # Priority To-Do items:
-- [ ] Generalize scalar data type from double
+- [x] Generalize scalar data type from double
 - [x] Basic arithmetic operations
 - [x] Allow for skips along ndarray axes
 - [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
