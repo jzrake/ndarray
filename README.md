@@ -1,8 +1,16 @@
-# ndarray
+# Introduction
 
 
-This project is an experimental, header-only implementation of a numpy-inspired ndarray template for pure C++0x. It should be comparable to (but perhaps cleaner and smaller than) Boost.MultiArray.
+This project is an experimental, header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_67_0/libs/multi_array/doc/index.html).
 
+
+If you are interested in a fully-featured and proffessionally maintained header-only numeric array package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
+
+
+If instead, you are interested in a dependency-free, single-header-file that gives you an `ndarray` container and not much else, this project might interest you.
+
+
+# Overview
 
 `ndarray` objects use the same memory model as the numpy's `ndarray`. The array itself is a lightweight stack object containing a `std::shared_ptr` to the allocated memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
 
