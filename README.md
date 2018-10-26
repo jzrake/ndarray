@@ -77,4 +77,4 @@ If instead, you are interested in a dependency-free, single-header-file that giv
 - [ ] Array transpose (and general axis permutation)
 - [x] Factory: stack from `std::initializer_list` of `ndarray<rank - 1>`
 - [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
-- [ ] Binary serialization
+- [x] Binary serialization

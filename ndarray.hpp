@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include <numeric>
+#include <cassert>
 #include "selector.hpp"
 
 
@@ -312,7 +313,7 @@ public:
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
     ndarray<rank - 1> operator[](int index)
     {
-        return {make_selector().collapse(index), data};
+        return {make_selector().select(index), data};
     }
 
     template <int R = rank, typename std::enable_if_t<R != 1>* = nullptr>
@@ -472,6 +473,64 @@ public:
     ndarray<rank> operator/(const ndarray<rank>& other) const { return binary_op<std::divides   <double>, rank>::perform(*this, other); }
 
 
+
+
+    /**
+     * Basic serialization operations
+     * 
+     */
+    // ========================================================================
+    std::string dumps() const
+    {
+        // rank  ... 1 int
+        // shape ... rank int's
+        // data  ... size T's
+
+        using T = double;
+
+        auto R = int(rank);
+        auto S = shape();
+        auto str = std::string();
+
+        str.insert(str.end(), (char*)&R, (char*)(&R + 1));
+        str.insert(str.end(), (char*)&S, (char*)(&S + 1));
+
+        for (const auto& x : *this)
+        {
+            str.insert(str.end(), (char*)&x, (char*)(&x + 1));
+        }
+        return str;
+    }
+
+    static ndarray<rank> loads(const std::string& str)
+    {
+        using T = double;
+
+        auto it = str.begin();
+        auto data = std::make_shared<std::vector<T>>();
+        auto x = T();
+        auto R = int();
+        auto S = constant_array<int, rank>(0);
+
+        assert(it + sizeof(R) <= str.end());
+        std::memcpy(&R, &*it, sizeof(R));
+        it += sizeof(R);
+
+        assert(it + sizeof(S) <= str.end());
+        std::memcpy(&S, &*it, sizeof(S));
+        it += sizeof(S);
+
+        while (it != str.end())
+        {
+            assert(it + sizeof(T) <= str.end());
+            std::memcpy(&x, &*it, sizeof(T));
+            data->push_back(x);
+            it += sizeof(T);
+        }
+
+        assert(R == rank);
+        return {S, data};
+    }
 
 
 private:
