@@ -23,6 +23,7 @@ namespace nd
 {
     template<typename T, int Rank, typename Op> class binary_op;
     template<typename T, int Rank> class ndarray;
+    template<typename T> struct dtype_str;
 }
 
 
@@ -59,6 +60,21 @@ struct nd::binary_op
             *a = op(*a, *b);
     }
 };
+
+
+
+
+// ============================================================================
+template<> struct nd::dtype_str<float > { static std::array<char, 8> value; };
+template<> struct nd::dtype_str<double> { static std::array<char, 8> value; };
+template<> struct nd::dtype_str<int   > { static std::array<char, 8> value; };
+template<> struct nd::dtype_str<long  > { static std::array<char, 8> value; };
+
+std::array<char, 8> nd::dtype_str<float >::value = {'f','4',  0,  0,  0,  0,  0,  0};
+std::array<char, 8> nd::dtype_str<double>::value = {'f','8',  0,  0,  0,  0,  0,  0};
+std::array<char, 8> nd::dtype_str<int   >::value = {'i','4',  0,  0,  0,  0,  0,  0};
+std::array<char, 8> nd::dtype_str<long  >::value = {'i','8',  0,  0,  0,  0,  0,  0};
+
 
 
 
@@ -527,16 +543,16 @@ public:
     // ========================================================================
     std::string dumps() const
     {
-        static_assert(std::is_same<T, double>::value, "Can only serialize double arrays");
-
         // rank  ... 1 int
         // shape ... rank int's
         // data  ... size T's
 
+        auto D = dtype_str<T>::value;
         auto R = int(rank);
         auto S = shape();
         auto str = std::string();
 
+        str.insert(str.end(), (char*)&D, (char*)(&D + 1));
         str.insert(str.end(), (char*)&R, (char*)(&R + 1));
         str.insert(str.end(), (char*)&S, (char*)(&S + 1));
 
@@ -549,13 +565,16 @@ public:
 
     static ndarray<T, rank> loads(const std::string& str)
     {
-        static_assert(std::is_same<T, double>::value, "Can only serialize double arrays");
-
         auto it = str.begin();
         auto data = std::make_shared<std::vector<T>>();
-        auto x = T();
+        auto D = std::array<char, 8>();
         auto R = int();
         auto S = constant_array<rank>(0);
+        auto x = T();
+
+        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(D) <= str.end(), "unexpected end of ndarray header string");
+        std::memcpy(&D, &*it, sizeof(D));
+        it += sizeof(D);
 
         NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(R) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&R, &*it, sizeof(R));
@@ -565,6 +584,7 @@ public:
         std::memcpy(&S, &*it, sizeof(S));
         it += sizeof(S);
 
+        NDARRAY_ASSERT_VALID_ARGUMENT(D == dtype_str<T>::value, "ndarray string has wrong data type");
         NDARRAY_ASSERT_VALID_ARGUMENT(R == rank, "ndarray string has the wrong rank");
 
         while (it != str.end())
@@ -679,7 +699,6 @@ private:
 using T = double;
 
 
-
 TEST_CASE("ndarray can be constructed ", "[ndarray]")
 {
     SECTION("trivial construction works OK")
@@ -760,6 +779,17 @@ TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [s
         REQUIRE_THROWS_AS((ndarray<T, 1>::loads("")), std::invalid_argument);
         REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "1234")), std::invalid_argument);
         REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "12345678")), std::invalid_argument);
+    }
+
+    SECTION("ndarray dtype strings are as expected")
+    {
+        REQUIRE(ndarray<float,  1>::arange(10).dumps().substr(0, 2) == "f4");
+        REQUIRE(ndarray<double, 1>::arange(10).dumps().substr(0, 2) == "f8");
+        REQUIRE(ndarray<int,    1>::arange(10).dumps().substr(0, 2) == "i4");
+        REQUIRE(ndarray<long,   1>::arange(10).dumps().substr(0, 2) == "i8");
+
+        // Should not compile, native type without a type string:
+        // REQUIRE(ndarray<char, 1>::arange(10).dumps().substr(0, 2) == "S0");
     }
 }
 
