@@ -1,18 +1,15 @@
+#pragma once
 #include <array>
 #include <numeric>
-#include <algorithm>
 #include <functional>
-#include <iostream>
-#include "catch.hpp"
 
 
 
 
 // ============================================================================
 template<int Rank, int Axis = 0>
-class selector
+struct selector
 {
-public:
 
 
     enum { rank = Rank, axis = Axis };
@@ -33,6 +30,18 @@ public:
             final[n] = count[n];
             skips[n] = 1;
         }
+    }
+
+    selector(
+        std::array<int, rank> count,
+        std::array<int, rank> start,
+        std::array<int, rank> final,
+        std::array<int, rank> skips)
+    : count(count)
+    , start(start)
+    , final(final)
+    , skips(skips)
+    {
     }
 
     template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
@@ -250,25 +259,7 @@ public:
     iterator end() const { return {reset(), final}; }
 
 
-private:
-
-
     // ========================================================================
-    selector(
-        std::array<int, rank> count,
-        std::array<int, rank> start,
-        std::array<int, rank> final,
-        std::array<int, rank> skips)
-    : count(count)
-    , start(start)
-    , final(final)
-    , skips(skips)
-    {
-    }
-
-
-    // ========================================================================
-public:
     std::array<int, rank> count;
     std::array<int, rank> start;
     std::array<int, rank> final;
@@ -282,7 +273,12 @@ public:
 
 
 
+
 // ============================================================================
+#ifdef TEST_SELECTOR
+#include "catch.hpp"
+
+
 TEST_CASE("selector<3> does construct and compare correctly", "[selector]")
 {
     auto S = selector<3>(10, 12, 14);
@@ -293,69 +289,67 @@ TEST_CASE("selector<3> does construct and compare correctly", "[selector]")
 }
 
 
-// ============================================================================
-TEST_CASE("selector<2> does select-collapse operations correctly", "[selector]")
+TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::select]")
 {
     auto S = selector<2>(3, 4);
 
     SECTION("Selections collapsing axis 0 @ i = 0 have the correct count, stride, and shape")
     {
-        CHECK(S.select(0, std::make_tuple(0, 4)).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(0, std::make_tuple(0, 4)).start == std::array<int, 1>{0});
-        CHECK(S.select(0, std::make_tuple(0, 4)).final == std::array<int, 1>{4});
+        CHECK(S.select(0, std::make_tuple(0, 4)).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(0, std::make_tuple(0, 4)).start     == std::array<int, 1>{0});
+        CHECK(S.select(0, std::make_tuple(0, 4)).final     == std::array<int, 1>{4});
         CHECK(S.select(0, std::make_tuple(0, 4)).strides() == std::array<int, 1>{1});
-        CHECK(S.select(0, std::make_tuple(0, 4)).shape() == std::array<int, 1>{4});
+        CHECK(S.select(0, std::make_tuple(0, 4)).shape()   == std::array<int, 1>{4});
     }
 
     SECTION("Selections collapsing axis 0 @ i = 1 have the correct count, stride, and shape")
     {
-        CHECK(S.select(1, std::make_tuple(0, 4)).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(1, std::make_tuple(0, 4)).start == std::array<int, 1>{4});
-        CHECK(S.select(1, std::make_tuple(0, 4)).final == std::array<int, 1>{8});
+        CHECK(S.select(1, std::make_tuple(0, 4)).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(1, std::make_tuple(0, 4)).start     == std::array<int, 1>{4});
+        CHECK(S.select(1, std::make_tuple(0, 4)).final     == std::array<int, 1>{8});
         CHECK(S.select(1, std::make_tuple(0, 4)).strides() == std::array<int, 1>{1});
-        CHECK(S.select(1, std::make_tuple(0, 4)).shape() == std::array<int, 1>{4});
+        CHECK(S.select(1, std::make_tuple(0, 4)).shape()   == std::array<int, 1>{4});
     }
 
     SECTION("Selections collapsing a subset of axis 0 @ i = 0 have the correct count, stride, and shape")
     {
-        CHECK(S.select(0, std::make_tuple(0, 2)).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(0, std::make_tuple(0, 2)).start == std::array<int, 1>{0});
-        CHECK(S.select(0, std::make_tuple(0, 2)).final == std::array<int, 1>{2});
+        CHECK(S.select(0, std::make_tuple(0, 2)).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(0, std::make_tuple(0, 2)).start     == std::array<int, 1>{0});
+        CHECK(S.select(0, std::make_tuple(0, 2)).final     == std::array<int, 1>{2});
         CHECK(S.select(0, std::make_tuple(0, 2)).strides() == std::array<int, 1>{1});
-        CHECK(S.select(0, std::make_tuple(0, 2)).shape() == std::array<int, 1>{2});
+        CHECK(S.select(0, std::make_tuple(0, 2)).shape()   == std::array<int, 1>{2});
     }
 
     SECTION("Selections collapsing axis 1 at j = 0 have the correct count, stride, and shape")
     {
-        CHECK(S.select(std::make_tuple(0, 3), 0).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(std::make_tuple(0, 3), 0).start == std::array<int, 1>{0});
-        CHECK(S.select(std::make_tuple(0, 3), 0).final == std::array<int, 1>{3 * 4 + 1});
+        CHECK(S.select(std::make_tuple(0, 3), 0).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(std::make_tuple(0, 3), 0).start     == std::array<int, 1>{0});
+        CHECK(S.select(std::make_tuple(0, 3), 0).final     == std::array<int, 1>{3 * 4 + 1});
         CHECK(S.select(std::make_tuple(0, 3), 0).strides() == std::array<int, 1>{4});
-        CHECK(S.select(std::make_tuple(0, 3), 0).shape() == std::array<int, 1>{3});
+        CHECK(S.select(std::make_tuple(0, 3), 0).shape()   == std::array<int, 1>{3});
     }
 
     SECTION("Selections collapsing axis 1 at j = 1 have the correct count, stride, and shape")
     {
-        CHECK(S.select(std::make_tuple(0, 3), 1).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(std::make_tuple(0, 3), 1).start == std::array<int, 1>{1});
-        CHECK(S.select(std::make_tuple(0, 3), 1).final == std::array<int, 1>{3 * 4 + 2});
+        CHECK(S.select(std::make_tuple(0, 3), 1).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(std::make_tuple(0, 3), 1).start     == std::array<int, 1>{1});
+        CHECK(S.select(std::make_tuple(0, 3), 1).final     == std::array<int, 1>{3 * 4 + 2});
         CHECK(S.select(std::make_tuple(0, 3), 1).strides() == std::array<int, 1>{4});
-        CHECK(S.select(std::make_tuple(0, 3), 1).shape() == std::array<int, 1>{3});
+        CHECK(S.select(std::make_tuple(0, 3), 1).shape()   == std::array<int, 1>{3});
     }
 
     SECTION("Selections collapsing a subset of axis 1 at j = 0 have the correct count, stride, and shape")
     {
-        CHECK(S.select(std::make_tuple(0, 2), 0).count == std::array<int, 1>{3 * 4});
-        CHECK(S.select(std::make_tuple(0, 2), 0).start == std::array<int, 1>{0});
-        CHECK(S.select(std::make_tuple(0, 2), 0).final == std::array<int, 1>{2 * 4 + 1});
+        CHECK(S.select(std::make_tuple(0, 2), 0).count     == std::array<int, 1>{3 * 4});
+        CHECK(S.select(std::make_tuple(0, 2), 0).start     == std::array<int, 1>{0});
+        CHECK(S.select(std::make_tuple(0, 2), 0).final     == std::array<int, 1>{2 * 4 + 1});
         CHECK(S.select(std::make_tuple(0, 2), 0).strides() == std::array<int, 1>{4});
-        CHECK(S.select(std::make_tuple(0, 2), 0).shape() == std::array<int, 1>{2});
+        CHECK(S.select(std::make_tuple(0, 2), 0).shape()   == std::array<int, 1>{2});
     }
 }
 
 
-
-TEST_CASE("selector<1> selects correctly with skip applied multiple times", "[selector::select]")
+TEST_CASE("selector<1> selects correctly with skip applied multiple times", "[selector::skip]")
 {
     auto S = selector<1>(64);
 
@@ -365,7 +359,7 @@ TEST_CASE("selector<1> selects correctly with skip applied multiple times", "[se
 }
 
 
-TEST_CASE("selector<4> skips on all dimensions correctly", "[selector::select]")
+TEST_CASE("selector<4> skips on all dimensions correctly", "[selector::skip]")
 {
     auto S = selector<4>(2, 4, 6, 8);
     CHECK(S.skip(2).skip(4).skip(6).skip(8).size() == 1);
@@ -416,3 +410,6 @@ TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterat
         S.next(I);
     }
 }
+
+
+#endif // TEST_SELECTOR

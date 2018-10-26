@@ -1,252 +1,16 @@
+#include <array>
 #include <memory>
 #include <vector>
-#include <array>
 #include <numeric>
+#include "selector.hpp"
 
 
 
 
 // ============================================================================
-template<int Rank, int Axis> struct selector;
+// template<int Rank, int Axis> struct selector;
 template<typename Op, int Rank> class binary_operation;
 template<int Rank> class ndarray;
-
-
-
-
-// ============================================================================
-template<int Rank, int Axis=0>
-struct selector
-{
-
-
-    enum { rank = Rank, axis = Axis };
-
-
-    /**
-        Collapse this selector at the given index, creating a selector with
-        rank reduced by 1, and which operates on the same axis.
-     */
-    selector<rank - 1, axis> collapse(int start_index) const
-    {
-        static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
-        static_assert(axis < rank - 1, "selector: cannot collapse final axis");
-
-        std::array<int, rank - 1> _count;
-        std::array<int, rank - 1> _start;
-        std::array<int, rank - 1> _final;
-        std::array<int, rank - 1> _skips;
-
-        for (int n = 0; n < axis; ++n)
-        {
-            _count[n] = count[n];
-            _start[n] = start[n];
-            _final[n] = final[n];
-            _skips[n] = skips[n];
-        }
-
-        for (int n = axis + 1; n < rank - 1; ++n)
-        {
-            _count[n] = count[n + 1];
-            _start[n] = start[n + 1];
-            _final[n] = final[n + 1];
-            _skips[n] = final[n + 1];
-        }
-
-        _count[axis] = count[axis] * count[axis + 1];
-        _start[axis] = count[axis] * start[axis] + start[axis + 1] + start_index * count[axis + 1];
-        _final[axis] = count[axis] * start[axis] + final[axis + 1] + start_index * count[axis + 1];
-        _skips[axis] = 1;
-
-        return {_count, _start, _final, _skips};
-    }
-
-    selector<rank - 1, axis> combine() const
-    {
-        static_assert(rank > 0, "selector: cannot combine zero-rank selector");
-        static_assert(axis < rank - 1, "selector: cannot combine final axis");
-
-        std::array<int, rank - 1> _count;
-        std::array<int, rank - 1> _start;
-        std::array<int, rank - 1> _final;
-        std::array<int, rank - 1> _skips;
-
-        for (int n = 0; n < axis; ++n)
-        {
-            _count[n] = count[n];
-            _start[n] = start[n];
-            _final[n] = final[n];
-            _skips[n] = skips[n];
-        }
-
-        for (int n = axis + 1; n < rank - 1; ++n)
-        {
-            _count[n] = count[n + 1];
-            _start[n] = start[n + 1];
-            _final[n] = final[n + 1];
-            _skips[n] = skips[n + 1];
-        }
-
-        _count[axis] = count[axis] * count[axis + 1];
-        _start[axis] = 0;
-        _final[axis] = count[axis] * count[axis + 1];
-        _skips[axis] = skips[axis] * (axis == 0 ? 1 : skips[axis - 1]);
-
-        return {_count, _start, _final, _skips};
-    }
-
-    /**
-        Alias for the collapse function.
-     */
-    selector<rank - 1, axis> select(int start_index) const
-    {
-        return collapse(start_index);
-    }
-
-    /**
-        Return a subset of this selector by specifying a range on each axis.
-     */
-    selector<rank, axis + 1> select(std::tuple<int, int> range) const
-    {
-        static_assert(axis < rank, "selector: attempting to index on axis >= rank");
-
-        auto _count = count;
-        auto _start = start;
-        auto _final = final;
-        auto _skips = skips;
-
-        _start[axis] = start[axis] + std::get<0>(range);
-        _final[axis] = start[axis] + std::get<1>(range);
-
-        return {_count, _start, _final, _skips};
-    }
-
-    selector<rank, axis + 1> select(int start_index, int final_index) const
-    {
-        return select(std::make_tuple(start_index, final_index));
-    }
-
-    /**
-        Return a selector of same or smaller rank, applying the collapse or select
-        operators sequentially to each axis.
-     */
-    template<typename First, typename... Rest>
-    auto select(First first, Rest... rest) const
-    {
-        return select(first).select(rest...);
-    }
-
-    /**
-        Return a selector covering the same sub-space but operating on the given axis.
-    */
-    template<int other_axis>
-    selector<rank, other_axis> on()
-    {
-        return {count, start, final, skips};
-    }
-
-    /**
-        Return a selector covering the same sub-space but operating on axis 0.
-     */
-    selector<rank> reset() const
-    {
-        return {count, start, final, skips};
-    }
-
-    /**
-        Return the shape of the sub-space covered by this selector.
-     */
-    std::array<int, rank> shape() const
-    {
-        std::array<int, rank> s;
-
-        for (int n = 0; n < rank; ++n)
-        {
-            s[n] = (final[n] - start[n]) / skips[n];
-        }
-        return s;
-    }
-
-    /**
-        Return the number of elements in the sub-space covered by this selector.
-     */
-    int size() const
-    {
-        auto s = shape();
-        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
-    }
-
-    bool operator==(const selector<rank, axis>& other) const
-    {
-        return count == other.count &&
-        start == other.start &&
-        final == other.final &&
-        skips == other.skips;
-    }
-
-    bool operator!=(const selector<rank, axis>& other) const
-    {
-        return count != other.count ||
-        start != other.start ||
-        final != other.final ||
-        skips != other.skips;
-    }
-
-    bool next(std::array<int, rank>& index) const
-    {
-        int n = rank - 1;
-
-        index[n] += skips[n];
-
-        while (index[n] == final[n])
-        {
-            if (n == 0)
-            {
-                index = final;
-                return false;
-            }
-            index[n] = start[n];
-
-            --n;
-
-            index[n] += skips[n];
-        }
-        return true;
-    }
-
-
-
-
-    // ========================================================================
-    class iterator
-    {
-    public:
-        iterator(selector<rank> sel, std::array<int, rank> ind) : sel(sel), ind(ind) {}
-        iterator& operator++() { sel.next(ind); return *this; }
-        iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
-        bool operator==(iterator other) const { return ind == other.ind; }
-        bool operator!=(iterator other) const { return ind != other.ind; }
-        const std::array<int, rank>& operator*() const { return ind; }
-    private:
-        std::array<int, rank> ind;
-        selector<rank> sel;
-    };
-
-    iterator begin() const { return {reset(), start}; }
-    iterator end() const { return {reset(), final}; }
-
-
-
-
-    /** Data members
-     *
-     */
-    // ========================================================================
-    std::array<int, rank> count;
-    std::array<int, rank> start;
-    std::array<int, rank> final;
-    std::array<int, rank> skips;
-};
 
 
 
@@ -294,7 +58,6 @@ public:
 
 
     enum { rank = Rank };
-
 
 
     /**
@@ -710,6 +473,7 @@ public:
 
 
 
+
 private:
     /**
      * Private utility methods
@@ -799,3 +563,20 @@ private:
     friend class ndarray;
     friend class iterator;
 };
+
+
+
+
+// ============================================================================
+#ifdef TEST_NDARRAY
+#include "catch.hpp"
+
+
+TEST_CASE("ndarray can be constructed ", "[ndarray]")
+{
+    ndarray<1> A(1);
+    CHECK(A.size() == 1);
+}
+
+
+#endif // TEST_NDARRAY

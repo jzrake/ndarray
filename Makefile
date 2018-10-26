@@ -1,9 +1,11 @@
 CXXFLAGS = -std=c++14
 
-default: main sel
+default: test
 
-main: main.o catch_main.o
+test.o: selector.hpp ndarray.hpp
+
+test: test.o catch.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
-sel: sel.o catch_main.o
-	$(CXX) -o $@ $(CXXFLAGS) $^
+clean:
+	$(RM) *.o test
