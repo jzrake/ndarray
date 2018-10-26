@@ -4,7 +4,7 @@
 This project is an experimental, header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_68_0/libs/multi_array/doc/index.html).
 
 
-If you are interested in a fully-featured and proffessionally maintained header-only numeric array package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
+If you are interested in a fully-featured and professionally maintained header-only numeric array package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
 
 
 If instead, you are interested in a dependency-free, single-header-file that gives you an `ndarray` container and not much else, this project might interest you.
