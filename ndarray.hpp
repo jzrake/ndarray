@@ -23,6 +23,67 @@ namespace nd
     template<typename T, int R, typename Op> class binary_op;
     template<typename T, int R> class ndarray;
     template<typename T> struct dtype_str;
+
+    template<typename T> ndarray<T, 1> arange(int size);
+    template<typename T> ndarray<T, 1> ones(int size);
+    template<typename T> ndarray<T, 1> zeros(int size);
+
+    template<typename T, int R>
+    nd::ndarray<T, R + 1> stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays);
+}
+
+
+
+
+// ============================================================================
+template<typename T> nd::ndarray<T, 1> nd::arange(int size)
+{
+    auto A = nd::ndarray<T, 1>(size);
+    auto x = T();
+    for (auto& a : A) a = x++;
+    return A;
+}
+
+template<typename T> nd::ndarray<T, 1> nd::ones(int size)
+{
+    auto A = nd::ndarray<T, 1>(size);
+    for (auto& a : A) a = 1;
+    return A;
+}
+
+template<typename T> nd::ndarray<T, 1> nd::zeros(int size)
+{
+    auto A = nd::ndarray<T, 1>(size);
+    for (auto& a : A) a = 0;
+    return A;
+}
+
+template<typename T, int R> /* UNTESTED */
+nd::ndarray<T, R + 1> nd::stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays)
+{
+    if (arrays.size() == 0)
+    {
+        return nd::ndarray<T, R>();            
+    }
+
+    auto required_shape = arrays.begin()->shape();
+
+    std::array<int, R> dim_sizes;
+    dim_sizes[0] = arrays.size();
+
+    for (int n = 1; n < R; ++n)
+    {
+        dim_sizes[n] = required_shape[n - 1];
+    }
+    auto A = nd::ndarray<T, R>(dim_sizes);
+    auto n = 0;
+
+    for (const auto& array : arrays)
+    {
+        A[n] = array;
+        ++n;
+    }
+    return A;
 }
 
 
@@ -250,68 +311,6 @@ public:
     {
         auto A = copy();
         return ndarray<T, sizeof...(Sizes)>({sizes...}, A.data);
-    }
-
-
-
-
-    /**
-     * Factories
-     * 
-     */
-    // ========================================================================
-    static ndarray<T, R> stack(std::initializer_list<ndarray<T, R - 1>> arrays)
-    {
-        if (arrays.size() == 0)
-        {
-            return ndarray<T, R>();            
-        }
-
-        auto required_shape = arrays.begin()->shape();
-
-        std::array<int, R> dim_sizes;
-        dim_sizes[0] = arrays.size();
-
-        for (int n = 1; n < rank; ++n)
-        {
-            dim_sizes[n] = required_shape[n - 1];
-        }
-        auto A = ndarray<T, R>(dim_sizes);
-        int n = 0;
-
-        for (const auto& array : arrays)
-        {
-            A[n] = array;
-            ++n;
-        }
-        return A;
-    }
-
-    template<typename... Sizes>
-    static ndarray<T, R> ones(Sizes... sizes)
-    {
-        auto A = ndarray<T, R>(sizes...);
-        auto x = T();
-        for (auto& a : A) a = 1;
-        return A;
-    }
-
-    template<typename... Sizes>
-    static ndarray<T, R> zeros(Sizes... sizes)
-    {
-        auto A = ndarray<T, R>(sizes...);
-        auto x = T();
-        for (auto& a : A) a = 0;
-        return A;
-    }
-
-    template<typename... Sizes>
-    static ndarray<T, R> arange(Sizes... sizes)
-    {
-        auto A = ndarray<T, R>(sizes...);
-        auto x = T();
-        for (auto& a : A) a = x++;
-        return A;
     }
 
 
@@ -734,9 +733,9 @@ TEST_CASE("ndarray can be constructed ", "[ndarray]")
 
 TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]")
 {
-    SECTION("1d arange works correctly")
+    SECTION("arange works correctly")
     {
-        auto A = ndarray<T, 1>::arange(10);
+        auto A = nd::arange<double>(10);
         auto x = T();
 
         REQUIRE(A.size() == 10);
@@ -747,19 +746,16 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
             REQUIRE(a == x++);
         }
     }
-
-    SECTION("2d arange works correctly")
+    SECTION("ones works correctly")
     {
-        auto A = ndarray<T, 2>::arange(10, 10);
-        auto x = T();
+        auto A = nd::ones<double>(10);
 
-        REQUIRE(A.size() == 100);
+        REQUIRE(A.size() == 10);
         REQUIRE(A.shape()[0] == 10);
-        REQUIRE(A.shape()[1] == 10);
 
         for (const auto& a : A)
         {
-            REQUIRE(a == x++);
+            REQUIRE(a == 1);
         }
     }
 }
@@ -767,8 +763,8 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
 
 TEST_CASE("ndarray can be copied and casted", "[ndarray]")
 {
-    auto A = ndarray<double, 1>::arange(10);
-    auto B = ndarray<float, 1>::arange(10);
+    auto A = nd::arange<double>(10);
+    auto B = nd::arange<float>(10);
     auto C = A.astype<float>();
 
     REQUIRE(B(0) == C(0));
@@ -793,8 +789,8 @@ TEST_CASE("ndarray selection works correctly", "[ndarray] [select]")
 
 TEST_CASE("ndarray can return a reshaped version of itself", "[ndarray] [reshape]")
 {
-    auto A = ndarray<T, 1>::arange(100);
-    const auto B = ndarray<T, 1>::arange(100);
+    auto A = nd::arange<T>(100);
+    const auto B = nd::arange<T>(100);
 
     REQUIRE(A.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
     REQUIRE(B.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
@@ -808,24 +804,23 @@ TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [s
 {
     SECTION("ndarray can be serialized and loaded")
     {
-        REQUIRE(ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps()).size() == 10);
-        REQUIRE(ndarray<T, 2>::loads(ndarray<T, 2>::arange(10, 9).dumps()).size() == 10 * 9);
-        REQUIRE(ndarray<T, 3>::loads(ndarray<T, 3>::arange(10, 9, 8).dumps()).size() == 10 * 9 * 8);
+        REQUIRE(ndarray<T, 1>::loads(nd::arange<T>(10).dumps()).size() == 10);
+        REQUIRE(ndarray<T, 2>::loads(nd::arange<T>(90).reshape(10, 9).dumps()).size() == 10 * 9);
     }
 
     SECTION("narray throws if attempting to load from invalid string")
     {
         REQUIRE_THROWS_AS((ndarray<T, 1>::loads("")), std::invalid_argument);
-        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "1234")), std::invalid_argument);
-        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(ndarray<T, 1>::arange(10).dumps() + "12345678")), std::invalid_argument);
+        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(nd::arange<T>(10).dumps() + "1234")), std::invalid_argument);
+        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(nd::arange<T>(10).dumps() + "12345678")), std::invalid_argument);
     }
 
     SECTION("ndarray dtype strings are as expected")
     {
-        REQUIRE(ndarray<float,  1>::arange(10).dumps().substr(0, 2) == "f4");
-        REQUIRE(ndarray<double, 1>::arange(10).dumps().substr(0, 2) == "f8");
-        REQUIRE(ndarray<int,    1>::arange(10).dumps().substr(0, 2) == "i4");
-        REQUIRE(ndarray<long,   1>::arange(10).dumps().substr(0, 2) == "i8");
+        REQUIRE(arange<float >(10).dumps().substr(0, 2) == "f4");
+        REQUIRE(arange<double>(10).dumps().substr(0, 2) == "f8");
+        REQUIRE(arange<int   >(10).dumps().substr(0, 2) == "i4");
+        REQUIRE(arange<long  >(10).dumps().substr(0, 2) == "i8");
 
         // Should not compile, native type without a type string:
         // REQUIRE(ndarray<char, 1>::arange(10).dumps().substr(0, 2) == "S0");
