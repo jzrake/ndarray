@@ -2,6 +2,8 @@
 #include "ndarray.hpp"
 
 
+
+
 int main()
 {
     nd::ndarray<double, 1> A(10);

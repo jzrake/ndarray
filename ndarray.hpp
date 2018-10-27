@@ -2,7 +2,6 @@
 #include <memory>
 #include <vector>
 #include <numeric>
-#include <cassert>
 #include "selector.hpp"
 
 

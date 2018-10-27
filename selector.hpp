@@ -3,7 +3,7 @@
 #include <numeric>
 #include <functional>
 
-
+#include <iostream>
 
 
 // ============================================================================
@@ -51,6 +51,10 @@ struct nd::selector
     , final(final)
     , skips(skips)
     {
+        if (! in_range())
+        {
+            throw std::out_of_range("selector not within allowed range");
+        }
     }
 
     template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
@@ -244,6 +248,26 @@ struct nd::selector
             --n;
 
             index[n] += skips[n];
+        }
+        return true;
+    }
+
+    bool in_range() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (start[n] > final[n])
+            {
+                return false;
+            }
+            else if (skips[n] <= 0)
+            {
+                return false;
+            }
+            else if (start[n] < 0 || count[n] <= final[n] - skips[n])
+            {
+                return false;
+            }
         }
         return true;
     }
