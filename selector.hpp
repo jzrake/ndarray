@@ -236,7 +236,7 @@ struct nd::selector
 
         index[n] += skips[n];
 
-        while (index[n] == final[n])
+        while (index[n] >= final[n])
         {
             if (n == 0)
             {
@@ -271,6 +271,11 @@ struct nd::selector
         }
         return true;
     }
+
+    // bool in_range(int start_index, int final_index) const
+    // {
+    //     return 0 <= start_index && final_index < (final[axis] - start[axis]) / skips[axis];
+    // }
 
 
     // ========================================================================
@@ -402,7 +407,6 @@ TEST_CASE("selector<2> does bounds checking correctly", "[selector] [safety]")
     REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 10), 12), std::out_of_range);
     REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 11), 0), std::out_of_range);
     REQUIRE_THROWS_AS(S.select(std::make_tuple(0, -1), 0), std::out_of_range);
-
 }
 
 
