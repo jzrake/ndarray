@@ -446,6 +446,13 @@ public:
         return {shape(), d};
     }
 
+    template<typename new_type>
+    ndarray<new_type, R> astype() const
+    {
+        auto d = std::make_shared<std::vector<new_type>>(begin(), end());
+        return {shape(), d};
+    }
+
     const std::vector<T>& container() const
     {
         return *data;
@@ -758,6 +765,19 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
 }
 
 
+TEST_CASE("ndarray can be copied and casted", "[ndarray]")
+{
+    auto A = ndarray<double, 1>::arange(10);
+    auto B = ndarray<float, 1>::arange(10);
+    auto C = A.astype<float>();
+
+    REQUIRE(B(0) == C(0));
+    REQUIRE(B(1) == C(1));
+    REQUIRE_FALSE(A.copy().shares(A));
+    REQUIRE_FALSE(C.shares(B));
+}
+
+
 TEST_CASE("ndarray selection works correctly", "[ndarray] [select]")
 {
     auto A = ndarray<T, 2>(3, 4);
@@ -784,7 +804,7 @@ TEST_CASE("ndarray can return a reshaped version of itself", "[ndarray] [reshape
 }
 
 
-TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [serialize]")
+TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [serialize] [safety]")
 {
     SECTION("ndarray can be serialized and loaded")
     {

@@ -383,6 +383,29 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
 }
 
 
+TEST_CASE("selector<2> does bounds checking correctly", "[selector] [safety]")
+{
+    auto S = selector<2>(10, 12);
+
+    REQUIRE_THROWS_AS(S.select(-1, std::make_tuple(0, 12)), std::out_of_range);
+    REQUIRE_THROWS_AS(S.select(10, std::make_tuple(0, 12)), std::out_of_range);
+    REQUIRE_THROWS_AS(S.select(0, std::make_tuple(0, -1)), std::out_of_range);
+
+    // The test below fails, and reveals a weakness in the selector scheme. It's
+    // not so much a bug as a limitation: there's no way to tell if we're out
+    // of bounds on axis 1, when axis axis 0 is first being collapsed. Bounds
+    // checking would need to be done before select is called recursively.
+    // 
+    // REQUIRE_THROWS_AS(S.select(0, std::make_tuple(0, 13)), std::out_of_range);
+
+    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 10), -1), std::out_of_range);
+    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 10), 12), std::out_of_range);
+    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 11), 0), std::out_of_range);
+    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, -1), 0), std::out_of_range);
+
+}
+
+
 TEST_CASE("selector<1> selects correctly with skip applied multiple times", "[selector::skip]")
 {
     auto S = selector<1>(64);
