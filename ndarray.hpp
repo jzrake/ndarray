@@ -1,3 +1,4 @@
+#pragma once
 #include <array>
 #include <memory>
 #include <vector>
@@ -366,12 +367,18 @@ public:
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
+        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+            throw std::out_of_range("ndarray: index out of range");
+
         return {offset_relative({index}), data};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index) const
     {
+        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+            throw std::out_of_range("ndarray: index out of range");
+
         auto d = std::make_shared<std::vector<T>>(1, data->operator[](offset_relative({index})));
         return {0, d};
     }
@@ -379,12 +386,18 @@ public:
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
+        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+            throw std::out_of_range("ndarray: index out of range");
+
         return {make_selector().select(index), data};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index) const
     {
+        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+            throw std::out_of_range("ndarray: index out of range");
+
         auto S = make_selector().collapse(index);
         auto d = std::make_shared<std::vector<T>>(S.size());
         auto a = d->begin();
@@ -400,8 +413,8 @@ public:
     template<typename... Index>
     T& operator()(Index... index)
     {
-        static_assert(sizeof...(index) == rank,
-          "Number of arguments to ndarray::operator() must match rank");
+        if (! make_selector().contains(index...))
+            throw std::out_of_range("ndarray: index out of range");
 
         return data->operator[](offset_relative({index...}));
     }
@@ -409,8 +422,8 @@ public:
     template<typename... Index>
     const T& operator()(Index... index) const
     {
-        static_assert(sizeof...(index) == rank,
-          "Number of arguments to ndarray::operator() must match rank");
+        if (! make_selector().contains(index...))
+            throw std::out_of_range("ndarray: selection out of range");
 
         return data->operator[](offset_relative({index...}));
     }
@@ -418,6 +431,9 @@ public:
     template<typename... Index>
     auto select(Index... index)
     {
+        if (! make_selector().contains(index...))
+            throw std::out_of_range("ndarray: selection out of range");
+
         auto S = make_selector().select(index...);
         return ndarray<T, S.rank>(S, data);
     }

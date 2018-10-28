@@ -1,3 +1,4 @@
+#pragma once
 #include <tuple>
 #include <array>
 
@@ -78,6 +79,7 @@ using namespace nd::shape;
 
 TEST_CASE("make_shape works correctly", "[shape]")
 {
+	SECTION("1D shapes are constructed")
     {
         auto t = make_shape(0);
         auto u = make_shape(std::make_tuple(0, 10));
@@ -86,6 +88,7 @@ TEST_CASE("make_shape works correctly", "[shape]")
         static_assert(std::is_same<decltype(u), std::array<std::tuple<int, int>, 1>>::value, "Not OK");
         static_assert(std::is_same<decltype(v), std::array<std::tuple<int, int>, 1>>::value, "Not OK");
     }
+    SECTION("2D shapes are constructed")
     {
         auto t = make_shape(0, 1);
         auto u = make_shape(0, std::make_tuple(1, 2));
@@ -100,6 +103,7 @@ TEST_CASE("make_shape works correctly", "[shape]")
         CHECK(std::get<0>(t[1]) == 1);
         CHECK(std::get<1>(t[1]) == 2);
     }
+    SECTION("3D shapes are constructed")
     {
         auto t = make_shape(0, std::make_tuple(1, 2), 2);
         auto u = make_shape(std::make_tuple(0, 1), 1, 2);
@@ -108,6 +112,11 @@ TEST_CASE("make_shape works correctly", "[shape]")
         CHECK(t == u);
         CHECK(u == v);
         CHECK(t.size() == 3);
+    }
+    SECTION("4D shapes are constructed")
+    {
+    	CHECK(make_shape(10, 10, 10, 10).size() == 4);
+    	CHECK(make_shape(10, 10, 10, std::make_tuple(0, 10)).size() == 4);
     }
 }
 

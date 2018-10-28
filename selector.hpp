@@ -2,6 +2,7 @@
 #include <array>
 #include <numeric>
 #include <functional>
+#include "shape.hpp"
 
 
 
@@ -272,10 +273,26 @@ struct nd::selector
         return true;
     }
 
-    // bool in_range(int start_index, int final_index) const
-    // {
-    //     return 0 <= start_index && final_index < (final[axis] - start[axis]) / skips[axis];
-    // }
+    template<typename... Index>
+    bool contains(Index... index)
+    {
+        static_assert(sizeof...(Index) == rank, "selector: index size must match rank");
+
+        auto S = shape::make_shape(index...);
+
+        for (int n = 0; n < rank; ++n)
+        {
+            auto start_index = std::get<0>(S[n]);
+            auto final_index = std::get<1>(S[n]);
+
+            if (start_index < 0 || final_index > (final[n] - start[n]) / skips[n])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
 
 
     // ========================================================================
