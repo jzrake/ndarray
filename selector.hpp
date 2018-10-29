@@ -54,6 +54,10 @@ struct nd::selector
     {
     }
 
+
+
+
+    // ========================================================================
     template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
     selector<rank - 1, axis - 1> collapse() const
     {
@@ -271,6 +275,7 @@ struct nd::selector
 
 
 
+
     // ========================================================================
     class iterator
     {
@@ -290,11 +295,15 @@ struct nd::selector
     iterator end() const { return {reset(), final}; }
 
 
+
+
     // ========================================================================
     std::array<int, rank> count;
     std::array<int, rank> start;
     std::array<int, rank> final;
     std::array<int, rank> skips;
+
+
 
 
     // ========================================================================

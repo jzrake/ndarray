@@ -22,7 +22,8 @@
 // ============================================================================
 namespace nd
 {
-    template<typename T, int R, typename Op> class binary_op;
+    template<typename T, typename U, int R, typename Op> class binary_op;
+    template<typename T, int R, typename Op> class unary_op;
     template<typename T, int R> class ndarray;
     template<typename T> struct dtype_str;
 
@@ -93,14 +94,35 @@ nd::ndarray<T, R + 1> nd::stack(std::initializer_list<nd::ndarray<T, R - 1>> arr
 
 // ============================================================================
 template<typename T, int R, typename Op>
+struct nd::unary_op
+{
+    static auto perform(const ndarray<T, R>& A)
+    {
+        auto op = Op();
+        auto B = ndarray<decltype(op(T())), R>(A.shape());
+        auto a = A.begin();
+        auto b = B.begin();
+
+        for (; a != A.end(); ++a, ++b)
+            *b = op(*a);
+
+        return B;
+    }
+};
+
+
+
+
+// ============================================================================
+template<typename T, typename U, int R, typename Op>
 struct nd::binary_op
 {
-    static ndarray<T, R> perform(const ndarray<T, R>& A, const ndarray<T, R>& B)
+    static auto perform(const ndarray<T, R>& A, const ndarray<U, R>& B)
     {
         NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
 
         auto op = Op();
-        auto C = ndarray<T, R>(A.shape());
+        auto C = ndarray<decltype(op(T(), U())), R>(A.shape());
         auto a = A.begin();
         auto b = B.begin();
         auto c = C.begin();
@@ -110,7 +132,7 @@ struct nd::binary_op
 
         return C;
     }
-    static void perform(ndarray<T, R>& A, const ndarray<T, R>& B)
+    static void perform(ndarray<T, R>& A, const ndarray<U, R>& B)
     {
         NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
 
@@ -324,15 +346,8 @@ public:
      * 
      */
     // ========================================================================
-    int size() const
-    {
-        return make_selector().size();
-    }
-
-    std::array<int, R> shape() const
-    {
-        return make_selector().shape();
-    }
+    auto size() const { return make_selector().size(); }
+    auto shape() const { return make_selector().shape(); }
 
     bool empty() const
     {
@@ -463,68 +478,59 @@ public:
 
 
     /**
+     * Operations
+     * 
+     */
+    // ========================================================================
+    template<typename U> struct OpEquals     { auto operator()(T a, U b) const { return a == b; } };
+    template<typename U> struct OpNotEquals  { auto operator()(T a, U b) const { return a != b; } };
+    template<typename U> struct OpPlus       { auto operator()(T a, U b) const { return a + b; } };
+    template<typename U> struct OpMinus      { auto operator()(T a, U b) const { return a - b; } };
+    template<typename U> struct OpMultiplies { auto operator()(T a, U b) const { return a * b; } };
+    template<typename U> struct OpDivides    { auto operator()(T a, U b) const { return a / b; } };
+    struct OpNegate { auto operator()(T a) const { return ! a; } };
+
+
+
+
+    /**
+     * Arithmetic operations
+     * 
+     */
+    // ========================================================================
+    template<typename U> auto& operator+=(U b) { for (auto& a : *this) { a += b; } return *this; }
+    template<typename U> auto& operator-=(U b) { for (auto& a : *this) { a -= b; } return *this; }
+    template<typename U> auto& operator*=(U b) { for (auto& a : *this) { a *= b; } return *this; }
+    template<typename U> auto& operator/=(U b) { for (auto& a : *this) { a /= b; } return *this; }
+
+    template<typename U> auto operator+(U b) const { auto A = copy(); for (auto& a : A) { a += b; } return A; }
+    template<typename U> auto operator-(U b) const { auto A = copy(); for (auto& a : A) { a -= b; } return A; }
+    template<typename U> auto operator*(U b) const { auto A = copy(); for (auto& a : A) { a *= b; } return A; }
+    template<typename U> auto operator/(U b) const { auto A = copy(); for (auto& a : A) { a /= b; } return A; }
+
+    template<typename U> auto& operator+=(const ndarray<U, R>& B) { binary_op<T, U, R, OpPlus      <U>>::perform(*this, B); return *this; }
+    template<typename U> auto& operator-=(const ndarray<U, R>& B) { binary_op<T, U, R, OpMinus     <U>>::perform(*this, B); return *this; }
+    template<typename U> auto& operator*=(const ndarray<U, R>& B) { binary_op<T, U, R, OpMultiplies<U>>::perform(*this, B); return *this; }
+    template<typename U> auto& operator/=(const ndarray<U, R>& B) { binary_op<T, U, R, OpDivides   <U>>::perform(*this, B); return *this; }
+
+    template<typename U> auto operator+(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpPlus      <U>>::perform(*this, B); }
+    template<typename U> auto operator-(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpMinus     <U>>::perform(*this, B); }
+    template<typename U> auto operator*(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpMultiplies<U>>::perform(*this, B); }
+    template<typename U> auto operator/(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpDivides   <U>>::perform(*this, B); }
+
+
+
+
+    /**
      * Comparison/equality methods and operators
      * 
      */
     // ========================================================================
-    template<typename S>
-    ndarray<bool, R> operator==(const ndarray<S, R>& other) const
-    {
-        auto res = ndarray<bool, R>(shape());
-        auto a = begin();
-        auto b = other.begin();
-        auto c = res.begin();
-
-        for (; c != res.end(); ++a, ++b, ++c)
-            *c = (*a == *b);
-
-        return res;
-    }
-
-    template<typename S>
-    ndarray<bool, R> operator!=(const ndarray<S, R>& other) const
-    {
-        auto res = ndarray<bool, R>(shape());
-        auto a = begin();
-        auto b = other.begin();
-        auto c = res.begin();
-
-        for (; c != res.end(); ++a, ++b, ++c)
-            *c = (*a != *b);
-
-        return res;
-    }
-
-    template<typename S>
-    ndarray<bool, R> operator!() const
-    {
-        auto res = ndarray<bool, R>(shape());
-        auto a = begin();
-        auto c = res.begin();
-
-        for (; c != res.end(); ++a, ++c)
-            *c = ! *a;
-
-        return res;
-    }
-
-    bool any() const
-    {
-        for (auto x : *this)
-        {
-            if (x) return true;
-        }
-        return false;
-    }
-
-    bool all() const
-    {
-        for (auto x : *this)
-        {
-            if (! x) return false;
-        }
-        return true;
-    }
+    template<typename U> auto operator==(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, B); }
+    template<typename U> auto operator!=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, B); }
+    auto operator!() const { return unary_op<T, R, OpNegate>::perform(*this); }
+    bool any() const { for (auto x : *this) if (x) return true; return false; }
+    bool all() const { for (auto x : *this) if (! x) return false; return true; }
 
     bool is(const ndarray<T, R>& other) const
     {
@@ -598,34 +604,6 @@ public:
 
     const_iterator begin() const { return {*this, make_selector().begin()}; }
     const_iterator end() const { return {*this, make_selector().end()}; }
-
-
-
-
-    /**
-     * Arithmetic operations
-     * 
-     */
-    // ========================================================================
-    ndarray<T, R>& operator+=(T value) { for (auto& a : *this) { a += value; } return *this; }
-    ndarray<T, R>& operator-=(T value) { for (auto& a : *this) { a -= value; } return *this; }
-    ndarray<T, R>& operator*=(T value) { for (auto& a : *this) { a *= value; } return *this; }
-    ndarray<T, R>& operator/=(T value) { for (auto& a : *this) { a /= value; } return *this; }
-
-    ndarray<T, R>& operator+=(const ndarray<T, R>& other) { binary_op<T, R, std::plus      <T>>::perform(*this, other); return *this; }
-    ndarray<T, R>& operator-=(const ndarray<T, R>& other) { binary_op<T, R, std::minus     <T>>::perform(*this, other); return *this; }
-    ndarray<T, R>& operator*=(const ndarray<T, R>& other) { binary_op<T, R, std::multiplies<T>>::perform(*this, other); return *this; }
-    ndarray<T, R>& operator/=(const ndarray<T, R>& other) { binary_op<T, R, std::divides   <T>>::perform(*this, other); return *this; }
-
-    ndarray<T, R> operator+(T value) const { auto A = copy(); for (auto& a : A) { a += value; } return A; }
-    ndarray<T, R> operator-(T value) const { auto A = copy(); for (auto& a : A) { a -= value; } return A; }
-    ndarray<T, R> operator*(T value) const { auto A = copy(); for (auto& a : A) { a *= value; } return A; }
-    ndarray<T, R> operator/(T value) const { auto A = copy(); for (auto& a : A) { a /= value; } return A; }
-
-    ndarray<T, R> operator+(const ndarray<T, R>& other) const { return binary_op<T, R, std::plus      <T>>::perform(*this, other); }
-    ndarray<T, R> operator-(const ndarray<T, R>& other) const { return binary_op<T, R, std::minus     <T>>::perform(*this, other); }
-    ndarray<T, R> operator*(const ndarray<T, R>& other) const { return binary_op<T, R, std::multiplies<T>>::perform(*this, other); }
-    ndarray<T, R> operator/(const ndarray<T, R>& other) const { return binary_op<T, R, std::divides   <T>>::perform(*this, other); }
 
 
 
@@ -970,7 +948,7 @@ TEST_CASE("ndarrays iterators respect const correctness", "[ndarray] [iterator]"
 
 TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] [comparison]")
 {
-    SECTION("comparison of array with itself is all true")
+    SECTION("basic comparison of two arrays with different types works")
     {
         auto A = nd::arange<int>(10);
         auto B = nd::ones<int>(10);
@@ -978,6 +956,30 @@ TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] 
         REQUIRE((A == A).all());
         REQUIRE((A == B).any());
         REQUIRE_FALSE((A == B).all());
+    }
+}
+
+
+TEST_CASE("ndarrays can perform basic arithmetic", "[ndarray] [arithmetic]")
+{
+    SECTION("add, sub, mul, div of arrays with the same type works as expected")
+    {
+        auto A = nd::zeros<int>(10);
+        auto B = nd::ones<int>(10);
+
+        REQUIRE((A + 1 == B).all());
+        REQUIRE((A - 1 == B - 2).all());
+        REQUIRE_FALSE((A - 1 == B + 2).any());
+    }
+
+    SECTION("add, sub, mul, div of arrays with the different types works as expected")
+    {
+        auto A = nd::zeros<int>(10);
+        auto B = nd::ones<double>(10);
+
+        REQUIRE((A + 1 == B).all());
+        REQUIRE((A - 1 == B - 2).all());
+        REQUIRE_FALSE((A - 1 == B + 2).any());
     }
 }
 

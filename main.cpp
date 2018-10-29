@@ -22,11 +22,13 @@ int main()
     }
 
     auto str = A.dumps();
-    // auto B = nd::ndarray<double, 1>::loads(str);
+    auto B = nd::ndarray<double, 1>::loads(str);
 
-    // for (int i = 0; i < B.size(); ++i)
+    for (int i = 0; i < B.size(); ++i)
     {
-        // std::cout << B(i, 0) << std::endl;
+        std::cout << B(i) << std::endl;
     }
+
+    auto C = (A + A) * nd::ones<int>(10);
     return 0;
 }
