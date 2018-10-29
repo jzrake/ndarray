@@ -1,7 +1,7 @@
 # Introduction
 
 
-This project is an experimental, header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_68_0/libs/multi_array/doc/index.html).
+This project is a header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_68_0/libs/multi_array/doc/index.html).
 
 
 If you are interested in a featureful and professionally maintained numerical package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
@@ -90,15 +90,28 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
+```C++
+  // Comparison operators similar to numpy
+
+  auto A = ndarray<1>::arange(10);
+  auto B = ndarray<1>::ones(10);
+  assert((A != B).all());
+  assert((A == B).any());
+```
+
+
 # Priority To-Do items:
 - [x] Generalize scalar data type from double
 - [x] Basic arithmetic operations
 - [x] Allow for skips along ndarray axes
-- [ ] Support for boolean mask-arrays, comparison operators >=, <=, etc.
+- [x] Support for comparison operators >=, <=, etc.
+- [ ] Indexing via boolean nd-mask arrays
+- [ ] Indexing via linear nd-index arrays
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
 - [x] Factories: zeros, ones, arange
 - [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
 - [x] Binary serialization
 - [x] Enable/disable use of C++ exceptions at compile time
+- [x] Bounds checking
 - [ ] Enable/disable bounds-checking at compile time
