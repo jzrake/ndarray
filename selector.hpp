@@ -52,10 +52,6 @@ struct nd::selector
     , final(final)
     , skips(skips)
     {
-        if (! in_range())
-        {
-            throw std::out_of_range("selector not within allowed range");
-        }
     }
 
     template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
@@ -253,26 +249,6 @@ struct nd::selector
         return true;
     }
 
-    bool in_range() const
-    {
-        for (int n = 0; n < rank; ++n)
-        {
-            if (start[n] > final[n])
-            {
-                return false;
-            }
-            else if (skips[n] <= 0)
-            {
-                return false;
-            }
-            else if (start[n] < 0 || count[n] <= final[n] - skips[n])
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     template<typename... Index>
     bool contains(Index... index)
     {
@@ -402,28 +378,6 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(std::make_tuple(0, 2), 0).strides() == std::array<int, 1>{4});
         CHECK(S.select(std::make_tuple(0, 2), 0).shape()   == std::array<int, 1>{2});
     }
-}
-
-
-TEST_CASE("selector<2> does bounds checking correctly", "[selector] [safety]")
-{
-    auto S = selector<2>(10, 12);
-
-    REQUIRE_THROWS_AS(S.select(-1, std::make_tuple(0, 12)), std::out_of_range);
-    REQUIRE_THROWS_AS(S.select(10, std::make_tuple(0, 12)), std::out_of_range);
-    REQUIRE_THROWS_AS(S.select(0, std::make_tuple(0, -1)), std::out_of_range);
-
-    // The test below fails, and reveals a weakness in the selector scheme. It's
-    // not so much a bug as a limitation: there's no way to tell if we're out
-    // of bounds on axis 1, when axis axis 0 is first being collapsed. Bounds
-    // checking would need to be done before select is called recursively.
-    // 
-    // REQUIRE_THROWS_AS(S.select(0, std::make_tuple(0, 13)), std::out_of_range);
-
-    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 10), -1), std::out_of_range);
-    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 10), 12), std::out_of_range);
-    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, 11), 0), std::out_of_range);
-    REQUIRE_THROWS_AS(S.select(std::make_tuple(0, -1), 0), std::out_of_range);
 }
 
 
