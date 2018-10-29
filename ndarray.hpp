@@ -96,7 +96,7 @@ struct nd::binary_op
 {
     static ndarray<T, R> perform(const ndarray<T, R>& A, const ndarray<T, R>& B)
     {
-        assert(A.shape() == B.shape());
+        NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
 
         auto op = Op();
         auto C = ndarray<T, R>(A.shape());
@@ -111,7 +111,7 @@ struct nd::binary_op
     }
     static void perform(ndarray<T, R>& A, const ndarray<T, R>& B)
     {
-        assert(A.shape() == B.shape());
+        NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
 
         auto op = Op();
         auto a = A.begin();
@@ -126,16 +126,17 @@ struct nd::binary_op
 
 
 // ============================================================================
+template<> struct nd::dtype_str<bool  > { static std::array<char, 8> value; };
 template<> struct nd::dtype_str<float > { static std::array<char, 8> value; };
 template<> struct nd::dtype_str<double> { static std::array<char, 8> value; };
 template<> struct nd::dtype_str<int   > { static std::array<char, 8> value; };
 template<> struct nd::dtype_str<long  > { static std::array<char, 8> value; };
 
+std::array<char, 8> nd::dtype_str<bool  >::value = {'b','1',  0,  0,  0,  0,  0,  0};
 std::array<char, 8> nd::dtype_str<float >::value = {'f','4',  0,  0,  0,  0,  0,  0};
 std::array<char, 8> nd::dtype_str<double>::value = {'f','8',  0,  0,  0,  0,  0,  0};
 std::array<char, 8> nd::dtype_str<int   >::value = {'i','4',  0,  0,  0,  0,  0,  0};
 std::array<char, 8> nd::dtype_str<long  >::value = {'i','8',  0,  0,  0,  0,  0,  0};
-
 
 
 
@@ -147,7 +148,7 @@ class nd::ndarray
 public:
 
 
-    using data_type = T;
+    using dtype = T;
     enum { rank = R };
 
 
@@ -444,17 +445,6 @@ public:
         return data->operator[](scalar_offset);
     }
 
-    bool is(const ndarray<T, R>& other) const
-    {
-        return (scalar_offset == other.scalar_offset
-        && count == other.count
-        && start == other.start
-        && final == other.final
-        && skips == other.skips
-        && strides == other.strides
-        && data == other.data);
-    }
-
     ndarray<T, R> copy() const
     {
         auto d = std::make_shared<std::vector<T>>(begin(), end());
@@ -471,6 +461,84 @@ public:
     const std::vector<T>& container() const
     {
         return *data;
+    }
+
+
+
+
+    /**
+     * Comparison/equality methods and operators
+     * 
+     */
+    // ========================================================================
+    template<typename S>
+    ndarray<bool, R> operator==(const ndarray<S, R>& other) const
+    {
+        auto res = ndarray<bool, R>(shape());
+        auto a = begin();
+        auto b = other.begin();
+        auto c = res.begin();
+
+        for (; c != res.end(); ++a, ++b)
+            *c = (*a == *b);
+
+        return res;
+    }
+
+    template<typename S>
+    ndarray<bool, R> operator!=(const ndarray<S, R>& other) const
+    {
+        auto res = ndarray<bool, R>(shape());
+        auto a = begin();
+        auto b = other.begin();
+        auto c = res.begin();
+
+        for (; c != res.end(); ++a, ++b)
+            *c = (*a != *b);
+
+        return res;
+    }
+
+    template<typename S>
+    ndarray<bool, R> operator!() const
+    {
+        auto res = ndarray<bool, R>(shape());
+        auto a = begin();
+        auto c = res.begin();
+
+        for (; c != res.end(); ++a)
+            *c = ! *a;
+
+        return res;
+    }
+
+    bool any() const
+    {
+        for (auto x : *this)
+        {
+            if (x) return true;
+        }
+        return false;
+    }
+
+    bool all() const
+    {
+        for (auto x : *this)
+        {
+            if (! x) return false;
+        }
+        return true;
+    }
+
+    bool is(const ndarray<T, R>& other) const
+    {
+        return (scalar_offset == other.scalar_offset
+        && count == other.count
+        && start == other.start
+        && final == other.final
+        && skips == other.skips
+        && strides == other.strides
+        && data == other.data);
     }
 
     template<int other_rank>
@@ -498,6 +566,7 @@ public:
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
         T& operator*() { return array.data->operator[](array.offset_absolute(*it)); }
+
     private:
         typename selector<rank>::iterator it;
         ndarray<T, R>& array;
@@ -525,6 +594,7 @@ public:
         bool operator==(const_iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(const_iterator other) const { return array.is(other.array) && it != other.it; }
         const T& operator*() const { return array.data->operator[](array.offset_absolute(*it)); }
+
     private:
         typename selector<rank>::iterator it;
         const ndarray<T, R>& array;
@@ -762,6 +832,7 @@ TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]"
             REQUIRE(a == x++);
         }
     }
+
     SECTION("ones works correctly")
     {
         auto A = nd::ones<double>(10);
@@ -874,6 +945,42 @@ TEST_CASE("ndarray throws attempting to index out-of-bounds", "[ndarray] [safety
         REQUIRE_THROWS_AS((ndarray<T, 1>(10)[10]), std::out_of_range);
         REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[-1]), std::out_of_range);
         REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[10]), std::out_of_range);
+    }
+}
+
+
+TEST_CASE("ndarrays iterators respect const correctness", "[ndarray] [iterator]")
+{
+    SECTION("non-const ndarray iterator can be assigned to properly")
+    {
+        auto A = ndarray<double, 1>(10);
+        auto it = A.begin();
+        *it = 12;
+        REQUIRE(*it == 12);
+    }
+
+    SECTION("const ndarray iterator cannot be assigned to")
+    {
+        const auto A = ndarray<double, 1>(10);
+        auto it = A.begin();
+        // *it = 12; /* should not compile! */
+        REQUIRE_FALSE(*it == 12);
+    }
+}
+
+
+TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] [comparison]")
+{
+    SECTION("comparison of array with itself is all true")
+    {
+        // NOT WORKING YET, cannot instantiate ndarray<bool>
+
+        // const auto A = ndarray<double, 1>(10);
+        // const ndarray<bool, 1> B = (A == A);
+
+        //auto B = (A == A);
+        // REQUIRE(B.all());
+        // static_assert(std::is_same<decltype(B)::dtype, bool>::value, "");
     }
 }
 
