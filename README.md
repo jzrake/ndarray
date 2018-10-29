@@ -82,19 +82,11 @@ The code should be transparent enough that you can modify it without much troubl
 
 
 ```C++
-  // Basic arithmetic expressions
+  // Basic arithmetic and comparison expressions
 
-  auto A = ndarray<1>::arange(10);
-  auto B = ndarray<1>::ones(10);
+  auto A = nd::arange<int>(10);
+  auto B = nd::ones<int>(10);
   auto C = (A + B) / 2.0;
-```
-
-
-```C++
-  // Comparison operators similar to numpy
-
-  auto A = ndarray<1>::arange(10);
-  auto B = ndarray<1>::ones(10);
   assert((A != B).all());
   assert((A == B).any());
 ```
