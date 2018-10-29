@@ -7,7 +7,7 @@ This project is a header-only implementation of a numpy-like `ndarray` template 
 If you are interested in a featureful and professionally maintained numerical package for C++, you should check out [xtensor](https://github.com/QuantStack/xtensor).
 
 
-If you just wanted a lightweight `ndarray` container and not much else, this project might interest you.
+However, if you prefer a lightweight `ndarray` container and not much else, this project might interest you.
 
 
 The code should be transparent enough that you can modify it without much trouble. Pull requests welcome!
