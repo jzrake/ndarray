@@ -474,6 +474,11 @@ public:
         return {shape(), d};
     }
 
+    const T* data() const
+    {
+        return buf->data();
+    }
+
 
 
 
