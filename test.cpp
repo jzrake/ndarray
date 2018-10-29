@@ -1,14 +1,9 @@
 #define TEST_SELECTOR
-#include "selector.hpp"
-
-
-#define TEST_NDARRAY
-#include "ndarray.hpp"
-
-
-#define TEST_SHAPE
-#include "shape.hpp"
-
-
 #define TEST_BUFFER
+#define TEST_NDARRAY
+#define TEST_SHAPE
+
+#include "selector.hpp"
+#include "ndarray.hpp"
+#include "shape.hpp"
 #include "buffer.hpp"

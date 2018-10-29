@@ -22,9 +22,9 @@ int main()
     }
 
     auto str = A.dumps();
-    auto B = nd::ndarray<double, 1>::loads(str);
+    // auto B = nd::ndarray<double, 1>::loads(str);
 
-    for (int i = 0; i < B.size(); ++i)
+    // for (int i = 0; i < B.size(); ++i)
     {
         // std::cout << B(i, 0) << std::endl;
     }

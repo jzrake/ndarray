@@ -55,23 +55,28 @@ public:
     template< class InputIt >
     buffer(InputIt first, InputIt last)
     {
-        auto it = first;
-
-        while (it != last)
         {
-            ++it;
-            ++count;
+            auto it = first;
+            count = 0;
+
+            while (it != last)
+            {
+                ++it;
+                ++count;
+            }
+            memory = new T[count];
         }
 
-        memory = new T[count];
-        it = first;
-        count = 0;
-
-        while (it != last)
         {
-            memory[count] = *it;
-            ++it;
-            ++count;
+            auto it = first;
+            auto n = 0;
+
+            while (it != last)
+            {
+                memory[n] = *it;
+                ++it;
+                ++n;
+            }
         }
     }
 
@@ -146,6 +151,12 @@ public:
     {
         return memory[offset];
     }
+
+    T* begin() { return memory; }
+    T* end() { return memory + count; }
+
+    const T* begin() const { return memory; }
+    const T* end() const { return memory + count; }
 
 private:
     T* memory = nullptr;

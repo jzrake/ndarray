@@ -1,8 +1,8 @@
 #pragma once
 #include <array>
 #include <memory>
-#include <vector>
 #include <numeric>
+#include "shape.hpp"
 #include "selector.hpp"
 #include "buffer.hpp"
 
@@ -161,14 +161,14 @@ public:
     template<int Rank = R, typename = typename std::enable_if<Rank == 0>::type>
     ndarray(T value=T())
     : scalar_offset(0)
-    , data(std::make_shared<std::vector<T>>(1, value))
+    , buf(std::make_shared<buffer<T>>(1, value))
     {
     }
 
     template<int Rank = R, typename = typename std::enable_if<Rank == 0>::type>
-    ndarray(int scalar_offset, std::shared_ptr<std::vector<T>>& data)
+    ndarray(int scalar_offset, std::shared_ptr<buffer<T>>& buf)
     : scalar_offset(scalar_offset)
-    , data(data)
+    , buf(buf)
     {
     }
 
@@ -179,7 +179,7 @@ public:
     , final({int(elements.size())})
     , skips({1})
     , strides({1})
-    , data(std::make_shared<std::vector<T>>(elements.begin(), elements.end()))
+    , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
     {
     }
 
@@ -191,13 +191,13 @@ public:
     }
 
     template<typename SelectorType>
-    ndarray(SelectorType selector, std::shared_ptr<std::vector<T>>& data)
+    ndarray(SelectorType selector, std::shared_ptr<buffer<T>>& buf)
     : count(selector.count)
     , start(selector.start)
     , final(selector.final)
     , skips(selector.skips)
     , strides(compute_strides(count))
-    , data(data)
+    , buf(buf)
     {
     }
 
@@ -211,20 +211,20 @@ public:
     , final(dim_sizes)
     , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(std::make_shared<std::vector<T>>(product(dim_sizes)))
+    , buf(std::make_shared<buffer<T>>(product(dim_sizes)))
     {
     }
 
-    ndarray(std::array<int, R> dim_sizes, std::shared_ptr<std::vector<T>>& data)
+    ndarray(std::array<int, R> dim_sizes, std::shared_ptr<buffer<T>>& buf)
     : count(dim_sizes)
     , start(constant_array<rank>(0))
     , final(dim_sizes)
     , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(data)
+    , buf(buf)
     {
         NDARRAY_ASSERT_VALID_ARGUMENT(
-            data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
+            buf->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
             "Size of data buffer is not the product of dim sizes");
     }
 
@@ -232,16 +232,16 @@ public:
         std::array<int, R> count,
         std::array<int, R> start,
         std::array<int, R> final,
-        std::shared_ptr<std::vector<T>>& data)
+        std::shared_ptr<buffer<T>>& buf)
     : count(count)
     , start(start)
     , final(final)
     , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(data)
+    , buf(buf)
     {
         NDARRAY_ASSERT_VALID_ARGUMENT(
-            data->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
+            buf->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
             "Size of data buffer is not the product of dim sizes");
     }
 
@@ -251,7 +251,7 @@ public:
     , final(other.shape())
     , skips(constant_array<rank>(1))
     , strides(compute_strides(count))
-    , data(std::make_shared<std::vector<T>>(size()))
+    , buf(std::make_shared<buffer<T>>(size()))
     {
         *this = other;
     }
@@ -300,20 +300,20 @@ public:
         final = other.final;
         skips = other.skips;
         strides = other.strides;
-        data = other.data;
+        buf = other.buf;
     }
 
     template<typename... Sizes>
     auto reshape(Sizes... sizes)
     {
-        return ndarray<T, sizeof...(Sizes)>({sizes...}, data);
+        return ndarray<T, sizeof...(Sizes)>({sizes...}, buf);
     }
 
     template<typename... Sizes>
     auto reshape(Sizes... sizes) const
     {
         auto A = copy();
-        return ndarray<T, sizeof...(Sizes)>({sizes...}, A.data);
+        return ndarray<T, sizeof...(Sizes)>({sizes...}, A.buf);
     }
 
 
@@ -372,7 +372,7 @@ public:
         if (index < 0 || index >= (start[0] - final[0]) / skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        return {offset_relative({index}), data};
+        return {offset_relative({index}), buf};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
@@ -381,7 +381,7 @@ public:
         if (index < 0 || index >= (start[0] - final[0]) / skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto d = std::make_shared<std::vector<T>>(1, data->operator[](offset_relative({index})));
+        auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
         return {0, d};
     }
 
@@ -391,7 +391,7 @@ public:
         if (index < 0 || index >= (start[0] - final[0]) / skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        return {make_selector().select(index), data};
+        return {make_selector().select(index), buf};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
@@ -401,7 +401,7 @@ public:
             throw std::out_of_range("ndarray: index out of range");
 
         auto S = make_selector().collapse(index);
-        auto d = std::make_shared<std::vector<T>>(S.size());
+        auto d = std::make_shared<buffer<T>>(S.size());
         auto a = d->begin();
         auto b = begin();
 
@@ -418,7 +418,7 @@ public:
         if (! make_selector().contains(index...))
             throw std::out_of_range("ndarray: index out of range");
 
-        return data->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({index...}));
     }
 
     template<typename... Index>
@@ -427,7 +427,7 @@ public:
         if (! make_selector().contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
-        return data->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({index...}));
     }
 
     template<typename... Index>
@@ -437,31 +437,26 @@ public:
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = make_selector().select(index...);
-        return ndarray<T, S.rank>(S, data);
+        return ndarray<T, S.rank>(S, buf);
     }
 
     operator T() const
     {
         static_assert(rank == 0, "can only convert rank-0 array to scalar value");
-        return data->operator[](scalar_offset);
+        return buf->operator[](scalar_offset);
     }
 
     ndarray<T, R> copy() const
     {
-        auto d = std::make_shared<std::vector<T>>(begin(), end());
+        auto d = std::make_shared<buffer<T>>(begin(), end());
         return {shape(), d};
     }
 
     template<typename new_type>
     ndarray<new_type, R> astype() const
     {
-        auto d = std::make_shared<std::vector<new_type>>(begin(), end());
+        auto d = std::make_shared<buffer<new_type>>(begin(), end());
         return {shape(), d};
-    }
-
-    const std::vector<T>& container() const
-    {
-        return *data;
     }
 
 
@@ -480,7 +475,7 @@ public:
         auto b = other.begin();
         auto c = res.begin();
 
-        for (; c != res.end(); ++a, ++b)
+        for (; c != res.end(); ++a, ++b, ++c)
             *c = (*a == *b);
 
         return res;
@@ -494,7 +489,7 @@ public:
         auto b = other.begin();
         auto c = res.begin();
 
-        for (; c != res.end(); ++a, ++b)
+        for (; c != res.end(); ++a, ++b, ++c)
             *c = (*a != *b);
 
         return res;
@@ -507,7 +502,7 @@ public:
         auto a = begin();
         auto c = res.begin();
 
-        for (; c != res.end(); ++a)
+        for (; c != res.end(); ++a, ++c)
             *c = ! *a;
 
         return res;
@@ -539,13 +534,13 @@ public:
         && final == other.final
         && skips == other.skips
         && strides == other.strides
-        && data == other.data);
+        && buf == other.buf);
     }
 
     template<int other_rank>
     bool shares(const ndarray<T, other_rank>& other) const
     {
-        return data == other.data;
+        return buf == other.buf;
     }
 
 
@@ -566,7 +561,7 @@ public:
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
-        T& operator*() { return array.data->operator[](array.offset_absolute(*it)); }
+        T& operator*() { return array.buf->operator[](array.offset_absolute(*it)); }
 
     private:
         typename selector<rank>::iterator it;
@@ -594,7 +589,7 @@ public:
         const_iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
         bool operator==(const_iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(const_iterator other) const { return array.is(other.array) && it != other.it; }
-        const T& operator*() const { return array.data->operator[](array.offset_absolute(*it)); }
+        const T& operator*() const { return array.buf->operator[](array.offset_absolute(*it)); }
 
     private:
         typename selector<rank>::iterator it;
@@ -665,7 +660,6 @@ public:
     static ndarray<T, R> loads(const std::string& str)
     {
         auto it = str.begin();
-        auto data = std::make_shared<std::vector<T>>();
         auto D = std::array<char, 8>();
         auto Q = int();
         auto S = constant_array<rank>(0);
@@ -686,15 +680,19 @@ public:
         NDARRAY_ASSERT_VALID_ARGUMENT(D == dtype_str<T>::value, "ndarray string has wrong data type");
         NDARRAY_ASSERT_VALID_ARGUMENT(Q == rank, "ndarray string has the wrong rank");
 
+        auto size = std::accumulate(S.begin(), S.end(), 1, std::multiplies<>());
+        auto wbuf = std::make_shared<buffer<T>>(size);
+        auto dest = wbuf->begin();
+
         while (it != str.end())
         {
-            NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(T) <= str.end(), "unexpected end of ndarray data string");
-            std::memcpy(&x, &*it, sizeof(T));
-            data->push_back(x);
+            NDARRAY_ASSERT_VALID_ARGUMENT(dest != wbuf->end(), "unexpected end of ndarray data string");
+            std::memcpy(&*dest, &*it, sizeof(T));
+            ++dest;
             it += sizeof(T);
         }
 
-        return {S, data};
+        return {S, wbuf};
     }
 
 
@@ -775,7 +773,7 @@ private:
     std::array<int, R> final;
     std::array<int, R> skips;
     std::array<int, R> strides;
-    std::shared_ptr<std::vector<T>> data;
+    std::shared_ptr<buffer<T>> buf;
 
 
 
@@ -798,7 +796,7 @@ private:
 using T = double;
 
 
-TEST_CASE("ndarray can be constructed ", "[ndarray]")
+TEST_CASE("ndarray can be constructed", "[ndarray]")
 {
     SECTION("trivial construction works OK")
     {
@@ -810,8 +808,8 @@ TEST_CASE("ndarray can be constructed ", "[ndarray]")
 
     SECTION("ndarray constructor throws if the data buffer has the wrong size")
     {
-        auto data_good = std::make_shared<std::vector<T>>(1);
-        auto data_bad  = std::make_shared<std::vector<T>>(2);
+        auto data_good = std::make_shared<buffer<T>>(1);
+        auto data_bad  = std::make_shared<buffer<T>>(2);
         REQUIRE_NOTHROW(ndarray<T, 1>({1}, data_good));
         REQUIRE_THROWS_AS((ndarray<T, 1>({1}, data_bad)), std::invalid_argument);
     }
@@ -974,14 +972,12 @@ TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] 
 {
     SECTION("comparison of array with itself is all true")
     {
-        // NOT WORKING YET, cannot instantiate ndarray<bool>
+        auto A = nd::arange<int>(10);
+        auto B = nd::ones<int>(10);
 
-        // const auto A = ndarray<double, 1>(10);
-        // const ndarray<bool, 1> B = (A == A);
-
-        //auto B = (A == A);
-        // REQUIRE(B.all());
-        // static_assert(std::is_same<decltype(B)::dtype, bool>::value, "");
+        REQUIRE((A == A).all());
+        REQUIRE((A == B).any());
+        REQUIRE_FALSE((A == B).all());
     }
 }
 
