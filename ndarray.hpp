@@ -4,6 +4,7 @@
 #include <vector>
 #include <numeric>
 #include "selector.hpp"
+#include "buffer.hpp"
 
 
 

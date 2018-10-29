@@ -8,3 +8,7 @@
 
 #define TEST_SHAPE
 #include "shape.hpp"
+
+
+#define TEST_BUFFER
+#include "buffer.hpp"
