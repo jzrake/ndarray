@@ -12,6 +12,7 @@ namespace nd
     {
         template<unsigned long rank>
         std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
+        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
         std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
         std::array<std::tuple<int, int>, 1> promote(int start_index);
         template<typename First> auto make_shape(First first);
@@ -28,6 +29,11 @@ template<unsigned long rank>
 std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<int, int>, rank> shape)
 {
     return shape;
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+{
+	return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
 }
 
 std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)

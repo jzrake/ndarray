@@ -838,8 +838,42 @@ TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [s
         REQUIRE(arange<int   >(10).dumps().substr(0, 2) == "i4");
         REQUIRE(arange<long  >(10).dumps().substr(0, 2) == "i8");
 
-        // Should not compile, native type without a type string:
+        // Should not compile, native type with no defined type string:
         // REQUIRE(ndarray<char, 1>::arange(10).dumps().substr(0, 2) == "S0");
+    }
+}
+
+
+TEST_CASE("ndarray throws attempting to index out-of-bounds", "[ndarray] [safety]")
+{
+    auto R = [] (auto... i) { return std::make_tuple(i...); };
+
+    SECTION("operator() throws if out of bounds")
+    {
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10)(-1)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10)(10)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0, 5))(-1)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0, 5))( 5)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(5,10))(-1)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(5,10))( 5)), std::out_of_range);
+
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(0, 5), R(0, 8))(-1, 0)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(0, 5), R(0, 8))( 5, 0)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(5,10), R(0, 8))(-1, 0)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(5,10), R(0, 8))( 5, 0)), std::out_of_range);
+
+        REQUIRE_NOTHROW((ndarray<T, 1>(10).select(R(0,10,2))(0)));
+        REQUIRE_NOTHROW((ndarray<T, 1>(10).select(R(0,10,2))(4)));
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0,10,2))(-1)), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0,10,2))( 5)), std::out_of_range);
+    }
+
+    SECTION("operator[] throws if out of bounds")
+    {
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10)[-1]), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 1>(10)[10]), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[-1]), std::out_of_range);
+        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[10]), std::out_of_range);
     }
 }
 
