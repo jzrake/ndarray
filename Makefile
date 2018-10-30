@@ -1,9 +1,12 @@
 CXXFLAGS = -std=c++14
 
-default: test main
+HEADERS = selector.hpp shape.hpp buffer.hpp ndarray.hpp
 
-test.o: selector.hpp shape.hpp buffer.hpp ndarray.hpp
-main.o: selector.hpp shape.hpp buffer.hpp ndarray.hpp
+default: test main
+main.o: include/ndarray.hpp
+test.o: $(HEADERS)
+include/ndarray.hpp: $(HEADERS)
+	./collate.sh $^ > $@
 
 test: test.o catch.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
@@ -12,4 +15,4 @@ main: main.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:
-	$(RM) *.o test
+	$(RM) *.o test main

@@ -1,10 +1,6 @@
 #pragma once
 #include <array>
-#include <memory>
 #include <numeric>
-#include "shape.hpp"
-#include "selector.hpp"
-#include "buffer.hpp"
 
 
 
@@ -20,7 +16,82 @@
 
 
 // ============================================================================
-namespace nd // ND_API_START
+namespace nd 
+{
+    template<int Rank, int Axis> struct selector;
+
+    namespace axis
+    {
+        struct selection
+        {
+            selection() {}
+            selection(int lower, int upper, int skips) : lower(lower), upper(upper), skips(skips) {}
+            operator std::tuple<int, int, int>() { return std::make_tuple(lower, upper, skips); }
+            int lower = 0, upper = 0, skips = 1;
+        };
+
+
+        struct range
+        {
+            range() {}
+            range(int lower, int upper) : lower(lower), upper(upper) {}
+            selection operator|(int skips) const { return selection(lower, upper, skips); }
+            operator std::tuple<int, int>() { return std::make_tuple(lower, upper); }
+            int lower = 0, upper = 0;
+        };
+
+
+        struct index
+        {
+            index() {}
+            index(int lower) : lower(lower) {}
+            range operator|(int upper) const { return range(lower, upper); }
+            operator int() { return lower; }
+            int lower = 0;
+        };
+
+
+        struct all
+        {
+            index operator|(int lower) { return index(lower); }
+            operator std::tuple<>() { return std::make_tuple(); }
+        };
+    }
+} 
+
+
+
+
+// ============================================================================
+namespace nd 
+{
+    namespace shape
+    {
+        template<unsigned long rank>
+        std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
+        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
+        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
+        std::array<std::tuple<int, int>, 1> promote(int start_index);
+        template<typename First> auto make_shape(First first);
+        template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
+        template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
+    }
+} 
+
+
+
+
+// ============================================================================
+namespace nd 
+{
+    template<typename T> class buffer;
+} 
+
+
+
+
+// ============================================================================
+namespace nd 
 {
     template<typename T, typename U, int R, typename Op> class binary_op;
     template<typename T, int R, typename Op> class unary_op;
@@ -33,13 +104,545 @@ namespace nd // ND_API_START
 
     template<typename T, int R>
     nd::ndarray<T, R + 1> stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays);
-} // ND_API_END
+} 
 
 
 
 
 // ============================================================================
-template<typename T> nd::ndarray<T, 1> nd::arange(int size) // ND_IMPL_START
+template<int Rank, int Axis = 0> 
+struct nd::selector
+{
+
+
+    enum { rank = Rank, axis = Axis };
+
+
+    // ========================================================================
+    selector() {}
+
+    template<typename... Dims>
+    selector(Dims... dims) : selector(std::array<int, rank>{dims...})
+    {
+        static_assert(sizeof...(Dims) == rank,
+            "selector: number of count arguments must match rank");
+    }
+
+    selector(std::array<int, rank> count) : count(count)
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            start[n] = 0;
+            final[n] = count[n];
+            skips[n] = 1;
+        }
+    }
+
+    selector(
+        std::array<int, rank> count,
+        std::array<int, rank> start,
+        std::array<int, rank> final,
+        std::array<int, rank> skips)
+    : count(count)
+    , start(start)
+    , final(final)
+    , skips(skips)
+    {
+    }
+
+
+
+
+    // ========================================================================
+    template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
+    selector<rank - 1, axis - 1> collapse() const
+    {
+        static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
+
+        std::array<int, rank - 1> _count;
+        std::array<int, rank - 1> _start;
+        std::array<int, rank - 1> _final;
+        std::array<int, rank - 1> _skips;
+
+        for (int n = 0; n < rank - 2; ++n)
+        {
+            _count[n] = count[n];
+            _start[n] = start[n];
+            _final[n] = final[n];
+            _skips[n] = skips[n];
+        }
+
+        _count[axis - 1] = count[axis] * count[axis - 1];
+        _start[axis - 1] = count[axis] * start[axis - 1] + start[axis];
+        _final[axis - 1] = count[axis] * final[axis - 1] + final[axis];
+        _skips[axis - 1] = count[axis];
+
+        return {_count, _start, _final, _skips};
+    }
+
+    template <int R = rank, int A = axis, typename std::enable_if_t<A < rank - 1>* = nullptr>
+    selector<rank - 1, axis> collapse() const
+    {
+        static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
+
+        std::array<int, rank - 1> _count;
+        std::array<int, rank - 1> _start;
+        std::array<int, rank - 1> _final;
+        std::array<int, rank - 1> _skips;
+
+        for (int n = 0; n < axis; ++n)
+        {
+            _count[n] = count[n];
+            _start[n] = start[n];
+            _final[n] = final[n];
+            _skips[n] = skips[n];
+        }
+
+        for (int n = axis + 1; n < rank - 1; ++n)
+        {
+            _count[n] = count[n + 1];
+            _start[n] = start[n + 1];
+            _final[n] = final[n + 1];
+            _skips[n] = skips[n + 1];
+        }
+
+        _count[axis] = count[axis + 1] * count[axis];
+        _start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
+        _final[axis] = count[axis + 1] * final[axis]; // + final[axis + 1];
+        _skips[axis] = 1;
+
+        return {_count, _start, _final, _skips};
+    }
+
+    selector<rank, axis + 1> range(int start_index, int final_index) const
+    {
+        return select(std::make_tuple(start_index, final_index, 1));
+    }
+
+    selector<rank, axis + 1> skip(int skips_index) const
+    {
+        return select(std::make_tuple(start[axis], final[axis], skips_index));
+    }
+
+    selector<rank, axis + 1> slice(int start_index, int final_index, int skips_index) const
+    {
+        return select(std::make_tuple(start_index, final_index, skips_index));
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
+    {
+        static_assert(axis < rank, "selector: cannot select on axis >= rank");
+
+        auto _count = count;
+        auto _start = start;
+        auto _final = final;
+        auto _skips = skips;
+
+        _start[axis] = start[axis] + std::get<0>(selection);
+        _final[axis] = start[axis] + std::get<1>(selection);
+        _skips[axis] = skips[axis] * std::get<2>(selection);
+
+        return {_count, _start, _final, _skips};
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int> start_final) const
+    {
+        return range(std::get<0>(start_final), std::get<1>(start_final));
+    }
+
+    auto select(int start_index) const
+    {
+        return range(start_index, start_index + 1).drop().collapse();
+    }
+
+    template<typename First, typename... Rest>
+    auto select(First first, Rest... rest) const
+    {
+        return select(first).select(rest...);
+    }
+
+    template<int new_axis>
+    selector<rank, new_axis> on() const
+    {
+        return {count, start, final, skips};
+    }
+
+    selector<rank> reset() const
+    {
+        return {count, start, final, skips};
+    }
+
+    selector<rank, axis - 1> drop() const
+    {
+        return {count, start, final, skips};
+    }
+
+    std::array<int, rank> strides() const
+    {
+        std::array<int, rank> s;
+        s[rank - 1] = 1;
+
+        for (int n = rank - 2; n >= 0; --n)
+        {
+            s[n] = s[n + 1] * count[n + 1];
+        }
+
+        for (int n = 0; n < rank; ++n)
+        {
+            s[n] *= skips[n];
+        }
+        return s;
+    }
+
+    std::array<int, rank> shape() const
+    {
+        std::array<int, rank> s;
+
+        for (int n = 0; n < rank; ++n)
+        {
+            s[n] = (final[n] - start[n]) / skips[n];
+        }
+        return s;
+    }
+
+    bool empty() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (count[n] == 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool contiguous() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (start[n] != 0 || final[n] != count[n] || skips[n] != 1)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    int size() const
+    {
+        auto s = shape();
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+    }
+
+    bool operator==(const selector<rank, axis>& other) const
+    {
+        return count == other.count &&
+        start == other.start &&
+        final == other.final &&
+        skips == other.skips;
+    }
+
+    bool operator!=(const selector<rank, axis>& other) const
+    {
+        return count != other.count ||
+        start != other.start ||
+        final != other.final ||
+        skips != other.skips;
+    }
+
+    bool next(std::array<int, rank>& index) const
+    {
+        int n = rank - 1;
+
+        index[n] += skips[n];
+
+        while (index[n] >= final[n])
+        {
+            if (n == 0)
+            {
+                index = final;
+                return false;
+            }
+            index[n] = start[n];
+
+            --n;
+
+            index[n] += skips[n];
+        }
+        return true;
+    }
+
+    template<typename... Index>
+    bool contains(Index... index)
+    {
+        static_assert(sizeof...(Index) == rank, "selector: index size must match rank");
+
+        auto S = shape::make_shape(index...);
+
+        for (int n = 0; n < rank; ++n)
+        {
+            auto start_index = std::get<0>(S[n]);
+            auto final_index = std::get<1>(S[n]);
+
+            if (start_index < 0 || final_index > (final[n] - start[n]) / skips[n])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+
+
+    // ========================================================================
+    class iterator
+    {
+    public:
+        iterator(selector<rank> sel, std::array<int, rank> ind) : sel(sel), ind(ind) {}
+        iterator& operator++() { sel.next(ind); return *this; }
+        iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
+        bool operator==(iterator other) const { return ind == other.ind; }
+        bool operator!=(iterator other) const { return ind != other.ind; }
+        const std::array<int, rank>& operator*() const { return ind; }
+    private:
+        std::array<int, rank> ind;
+        selector<rank> sel;
+    };
+
+    iterator begin() const { return {reset(), start}; }
+    iterator end() const { return {reset(), final}; }
+
+
+
+
+    // ========================================================================
+    std::array<int, rank> count;
+    std::array<int, rank> start;
+    std::array<int, rank> final;
+    std::array<int, rank> skips;
+
+
+
+
+    // ========================================================================
+    template<int other_rank, int other_axis>
+    friend class selector;
+}; 
+
+
+
+
+// ============================================================================
+template<unsigned long rank> 
+std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<int, int>, rank> shape)
+{
+    return shape;
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+{
+	return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)
+{
+    return {range};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(int start_index)
+{
+    return {std::make_tuple(start_index, start_index + 1)};
+}
+
+template<typename First>
+auto nd::shape::make_shape(First first)
+{
+    return promote(first);
+}
+
+template<typename Shape1, typename Shape2>
+auto nd::shape::make_shape(Shape1 shape1, Shape2 shape2)
+{
+    auto s1 = promote(shape1);
+    auto s2 = promote(shape2);
+    auto res = std::array<std::tuple<int, int>, s1.size() + s2.size()>();
+
+    for (int n = 0; n < s1.size(); ++n)
+        res[n] = s1[n];
+
+    for (int n = 0; n < s2.size(); ++n)
+        res[n + s1.size()] = s2[n];
+
+    return res;
+}
+
+template<typename First, typename... Rest>
+auto nd::shape::make_shape(First first, Rest... rest)
+{
+    return make_shape(first, make_shape(rest...));
+} 
+
+
+
+
+// ============================================================================
+template<typename T> 
+class nd::buffer
+{
+public:
+    using size_type = std::size_t;
+
+    buffer() {}
+
+    buffer(const buffer<T>& other)
+    {
+        count = other.count;
+        memory = new T[count];
+
+        for (int n = 0; n < count; ++n)
+        {
+            memory[n] = other.memory[n];
+        }
+    }
+
+    buffer(buffer<T>&& other)
+    {
+        delete [] memory;
+        memory = other.memory;
+        count = other.count;
+
+        other.memory = nullptr;
+        other.count = 0;
+    }
+
+    explicit buffer(size_type count, const T& value = T()) : count(count)
+    {
+        memory = new T[count];
+
+        for (int n = 0; n < count; ++n)
+        {
+            memory[n] = value;
+        }
+    }
+
+    template< class InputIt >
+    buffer(InputIt first, InputIt last)
+    {
+        {
+            auto it = first;
+            count = 0;
+
+            while (it != last)
+            {
+                ++it;
+                ++count;
+            }
+            memory = new T[count];
+        }
+
+        {
+            auto it = first;
+            auto n = 0;
+
+            while (it != last)
+            {
+                memory[n] = *it;
+                ++it;
+                ++n;
+            }
+        }
+    }
+
+    ~buffer()
+    {
+        delete [] memory;
+    }
+
+    buffer<T>& operator=(const buffer<T>& other)
+    {
+        delete [] memory;
+
+        count = other.count;
+        memory = new T[count];
+
+        for (int n = 0; n < count; ++n)
+        {
+            memory[n] = other.memory[n];
+        }
+        return *this;
+    }
+
+    buffer<T>& operator=(buffer<T>&& other)
+    {
+        delete [] memory;
+        memory = other.memory;
+        count = other.count;
+
+        other.memory = nullptr;
+        other.count = 0;
+        return *this;
+    }
+
+    bool operator==(const buffer<T>& other) const
+    {
+        if (count != other.count)
+        {
+            return false;
+        }
+
+        for (int n = 0; n < size(); ++n)
+        {
+            if (memory[n] != other.memory[n])            
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool operator!=(const buffer<T>& other) const
+    {
+        return ! operator==(other);
+    }
+
+    size_type size() const
+    {
+        return count;
+    }
+
+    const T* data() const
+    {
+        return memory;
+    }
+
+    const T& operator[](size_type offset) const
+    {
+        return memory[offset];
+    }
+
+    T& operator[](size_type offset)
+    {
+        return memory[offset];
+    }
+
+    T* begin() { return memory; }
+    T* end() { return memory + count; }
+
+    const T* begin() const { return memory; }
+    const T* end() const { return memory + count; }
+
+private:
+    T* memory = nullptr;
+    size_type count = 0;
+}; 
+
+
+
+
+// ============================================================================
+template<typename T> nd::ndarray<T, 1> nd::arange(int size) 
 {
     auto A = nd::ndarray<T, 1>(size);
     auto x = T();
@@ -681,243 +1284,4 @@ private:
     template<typename, int>
     friend class ndarray;
     friend class iterator;
-}; // ND_IMPL_END
-
-
-
-
-// ============================================================================
-#ifdef TEST_NDARRAY
-#include "catch.hpp"
-using T = double;
-
-
-TEST_CASE("ndarray can be constructed", "[ndarray]")
-{
-    SECTION("trivial construction works OK")
-    {
-        REQUIRE(ndarray<T, 1>(1).size() == 1);
-        REQUIRE(ndarray<T, 1>(1).shape() == std::array<int, 1>{1});
-        REQUIRE(ndarray<T, 1>().empty());
-        REQUIRE_FALSE(ndarray<T, 1>(1).empty());
-    }
-
-    SECTION("ndarray constructor throws if the data buffer has the wrong size")
-    {
-        auto data_good = std::make_shared<buffer<T>>(1);
-        auto data_bad  = std::make_shared<buffer<T>>(2);
-        REQUIRE_NOTHROW(ndarray<T, 1>({1}, data_good));
-        REQUIRE_THROWS_AS((ndarray<T, 1>({1}, data_bad)), std::invalid_argument);
-    }
-}
-
-
-TEST_CASE("ndarray can be created from basic factories", "[ndarray] [factories]")
-{
-    SECTION("arange works correctly")
-    {
-        auto A = nd::arange<double>(10);
-        auto x = T();
-
-        REQUIRE(A.size() == 10);
-        REQUIRE(A.shape()[0] == 10);
-
-        for (const auto& a : A)
-        {
-            REQUIRE(a == x++);
-        }
-    }
-
-    SECTION("ones works correctly")
-    {
-        auto A = nd::ones<double>(10);
-
-        REQUIRE(A.size() == 10);
-        REQUIRE(A.shape()[0] == 10);
-
-        for (const auto& a : A)
-        {
-            REQUIRE(a == 1);
-        }
-    }
-}
-
-
-TEST_CASE("ndarray can be copied and casted", "[ndarray]")
-{
-    auto A = nd::arange<double>(10);
-    auto B = nd::arange<float>(10);
-    auto C = A.astype<float>();
-
-    REQUIRE(B(0) == C(0));
-    REQUIRE(B(1) == C(1));
-    REQUIRE_FALSE(A.copy().shares(A));
-    REQUIRE_FALSE(C.shares(B));
-}
-
-
-TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarray] [TEST]")
-{
-    SECTION("Works for non-const ndarray")
-    {
-        auto A = nd::ndarray<int, 3>(10, 12, 14);
-        REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
-        REQUIRE(A[0].shares(A));
-    }
-
-    SECTION("Works for const ndarray")
-    {
-        const auto A = nd::ndarray<int, 3>(10, 12, 14);
-        REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
-        REQUIRE_FALSE(A[0].shares(A));
-    }
-}
-
-
-TEST_CASE("ndarray selection works correctly", "[ndarray] [select]")
-{
-    auto A = ndarray<T, 2>(3, 4);
-    auto B0 = A.select(std::make_tuple(0, 3), 0);
-    auto B1 = A.select(0, std::make_tuple(0, 4));
-
-    REQUIRE(B0.shape() == std::array<int, 1>{3});
-    REQUIRE(B1.shape() == std::array<int, 1>{4});
-    REQUIRE_FALSE(B0.contiguous());
-    REQUIRE_FALSE(B1.contiguous());
-}
-
-
-TEST_CASE("ndarray can return a reshaped version of itself", "[ndarray] [reshape]")
-{
-    auto A = nd::arange<T>(100);
-    const auto B = nd::arange<T>(100);
-
-    REQUIRE(A.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
-    REQUIRE(B.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
-    REQUIRE(A.reshape(10, 10).shares(A));
-    REQUIRE_FALSE(B.reshape(10, 10).shares(B));
-    REQUIRE_THROWS_AS(A.reshape(10, 11), std::invalid_argument);
-}
-
-
-TEST_CASE("ndarray can be serialized to and loaded from a string", "[ndarray] [serialize] [safety]")
-{
-    SECTION("ndarray can be serialized and loaded")
-    {
-        REQUIRE(ndarray<T, 1>::loads(nd::arange<T>(10).dumps()).size() == 10);
-        REQUIRE(ndarray<T, 2>::loads(nd::arange<T>(90).reshape(10, 9).dumps()).size() == 10 * 9);
-    }
-
-    SECTION("narray throws if attempting to load from invalid string")
-    {
-        REQUIRE_THROWS_AS((ndarray<T, 1>::loads("")), std::invalid_argument);
-        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(nd::arange<T>(10).dumps() + "1234")), std::invalid_argument);
-        REQUIRE_THROWS_AS((ndarray<T, 1>::loads(nd::arange<T>(10).dumps() + "12345678")), std::invalid_argument);
-    }
-
-    SECTION("ndarray dtype strings are as expected")
-    {
-        REQUIRE(arange<float >(10).dumps().substr(0, 2) == "f4");
-        REQUIRE(arange<double>(10).dumps().substr(0, 2) == "f8");
-        REQUIRE(arange<int   >(10).dumps().substr(0, 2) == "i4");
-        REQUIRE(arange<long  >(10).dumps().substr(0, 2) == "i8");
-
-        // Should not compile, native type with no defined type string:
-        // REQUIRE(ndarray<char, 1>::arange(10).dumps().substr(0, 2) == "S0");
-    }
-}
-
-
-TEST_CASE("ndarray throws attempting to index out-of-bounds", "[ndarray] [safety]")
-{
-    auto R = [] (auto... i) { return std::make_tuple(i...); };
-
-    SECTION("operator() throws if out of bounds")
-    {
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10)(-1)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10)(10)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0, 5))(-1)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0, 5))( 5)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(5,10))(-1)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(5,10))( 5)), std::out_of_range);
-
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(0, 5), R(0, 8))(-1, 0)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(0, 5), R(0, 8))( 5, 0)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(5,10), R(0, 8))(-1, 0)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8).select(R(5,10), R(0, 8))( 5, 0)), std::out_of_range);
-
-        REQUIRE_NOTHROW((ndarray<T, 1>(10).select(R(0,10,2))(0)));
-        REQUIRE_NOTHROW((ndarray<T, 1>(10).select(R(0,10,2))(4)));
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0,10,2))(-1)), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10).select(R(0,10,2))( 5)), std::out_of_range);
-    }
-
-    SECTION("operator[] throws if out of bounds")
-    {
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10)[-1]), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 1>(10)[10]), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[-1]), std::out_of_range);
-        REQUIRE_THROWS_AS((ndarray<T, 2>(10, 8)[10]), std::out_of_range);
-    }
-}
-
-
-TEST_CASE("ndarrays iterators respect const correctness", "[ndarray] [iterator]")
-{
-    SECTION("non-const ndarray iterator can be assigned to properly")
-    {
-        auto A = ndarray<double, 1>(10);
-        auto it = A.begin();
-        *it = 12;
-        REQUIRE(*it == 12);
-    }
-
-    SECTION("const ndarray iterator cannot be assigned to")
-    {
-        const auto A = ndarray<double, 1>(10);
-        auto it = A.begin();
-        // *it = 12; /* should not compile! */
-        REQUIRE_FALSE(*it == 12);
-    }
-}
-
-
-TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] [comparison]")
-{
-    SECTION("basic comparison of two arrays with different types works")
-    {
-        auto A = nd::arange<int>(10);
-        auto B = nd::ones<int>(10);
-
-        REQUIRE((A == A).all());
-        REQUIRE((A == B).any());
-        REQUIRE_FALSE((A == B).all());
-    }
-}
-
-
-TEST_CASE("ndarrays can perform basic arithmetic", "[ndarray] [arithmetic]")
-{
-    SECTION("add, sub, mul, div of arrays with the same type works as expected")
-    {
-        auto A = nd::zeros<int>(10);
-        auto B = nd::ones<int>(10);
-
-        REQUIRE((A + 1 == B).all());
-        REQUIRE((A - 1 == B - 2).all());
-        REQUIRE_FALSE((A - 1 == B + 2).any());
-    }
-
-    SECTION("add, sub, mul, div of arrays with the different types works as expected")
-    {
-        auto A = nd::zeros<int>(10);
-        auto B = nd::ones<double>(10);
-
-        REQUIRE((A + 1 == B).all());
-        REQUIRE((A - 1 == B - 2).all());
-        REQUIRE_FALSE((A - 1 == B + 2).any());
-    }
-}
-
-
-#endif // TEST_NDARRAY
+}; 

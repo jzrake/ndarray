@@ -4,16 +4,16 @@
 
 
 // ============================================================================
-namespace nd
+namespace nd // ND_API_START
 {
     template<typename T> class buffer;
-}
+} // ND_API_END
 
 
 
 
 // ============================================================================
-template<typename T>
+template<typename T> // ND_IMPL_START
 class nd::buffer
 {
 public:
@@ -161,7 +161,7 @@ public:
 private:
     T* memory = nullptr;
     size_type count = 0;
-};
+}; // ND_IMPL_END
 
 
 

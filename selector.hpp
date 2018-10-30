@@ -8,7 +8,7 @@
 
 
 // ============================================================================
-namespace nd // ND_NAMESPACE_START
+namespace nd // ND_API_START
 {
     template<int Rank, int Axis> struct selector;
 
@@ -49,13 +49,13 @@ namespace nd // ND_NAMESPACE_START
             operator std::tuple<>() { return std::make_tuple(); }
         };
     }
-} // ND_NAMESPACE_END
+} // ND_API_END
 
 
 
 
 // ============================================================================
-template<int Rank, int Axis = 0> // ND_CLASS_START
+template<int Rank, int Axis = 0> // ND_IMPL_START
 struct nd::selector
 {
 
@@ -374,7 +374,7 @@ struct nd::selector
     // ========================================================================
     template<int other_rank, int other_axis>
     friend class selector;
-}; // ND_CLASS_END
+}; // ND_IMPL_END
 
 
 

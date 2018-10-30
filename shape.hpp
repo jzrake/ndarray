@@ -6,7 +6,7 @@
 
 
 // ============================================================================
-namespace nd
+namespace nd // ND_API_START
 {
     namespace shape
     {
@@ -19,13 +19,13 @@ namespace nd
         template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
         template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
     }
-}
+} // ND_API_END
 
 
 
 
 // ============================================================================
-template<unsigned long rank>
+template<unsigned long rank> // ND_IMPL_START
 std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<int, int>, rank> shape)
 {
     return shape;
@@ -72,7 +72,7 @@ template<typename First, typename... Rest>
 auto nd::shape::make_shape(First first, Rest... rest)
 {
     return make_shape(first, make_shape(rest...));
-}
+} // ND_IMPL_END
 
 
 

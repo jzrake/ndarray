@@ -1,5 +1,5 @@
 #include <iostream>
-#include "ndarray.hpp"
+#include "include/ndarray.hpp"
 
 
 
