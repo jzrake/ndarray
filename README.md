@@ -90,8 +90,8 @@ The code should be transparent enough that you can modify it without much troubl
   auto A = nd::arange<int>(10);
   auto B = nd::ones<int>(10);
   auto C = (A + B) / 2.0;
-  assert((A != B).all());
-  assert((A == B).any());
+  assert(! (A == B).all());
+  assert(  (A == B).any());
 ```
 
 
