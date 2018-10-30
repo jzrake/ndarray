@@ -428,6 +428,10 @@ public:
     // ========================================================================
     template<typename U> struct OpEquals     { auto operator()(T a, U b) const { return a == b; } };
     template<typename U> struct OpNotEquals  { auto operator()(T a, U b) const { return a != b; } };
+    template<typename U> struct OpGreaterEq  { auto operator()(T a, U b) const { return a >= b; } };
+    template<typename U> struct OpGreater    { auto operator()(T a, U b) const { return a > b; } };
+    template<typename U> struct OpLessEq     { auto operator()(T a, U b) const { return a <= b; } };
+    template<typename U> struct OpLess       { auto operator()(T a, U b) const { return a < b; } };
     template<typename U> struct OpPlus       { auto operator()(T a, U b) const { return a + b; } };
     template<typename U> struct OpMinus      { auto operator()(T a, U b) const { return a - b; } };
     template<typename U> struct OpMultiplies { auto operator()(T a, U b) const { return a * b; } };
@@ -471,6 +475,10 @@ public:
     // ========================================================================
     template<typename U> auto operator==(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, B); }
     template<typename U> auto operator!=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, B); }
+    template<typename U> auto operator>=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreaterEq<U>>::perform(*this, B); }
+    template<typename U> auto operator> (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, B); }
+    template<typename U> auto operator<=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, B); }
+    template<typename U> auto operator< (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, B); }
     auto operator!() const { return unary_op<T, R, OpNegate>::perform(*this); }
     bool any() const { for (auto x : *this) if (x) return true; return false; }
     bool all() const { for (auto x : *this) if (! x) return false; return true; }
