@@ -8,16 +8,54 @@
 
 
 // ============================================================================
-namespace nd
+namespace nd // ND_NAMESPACE_START
 {
     template<int Rank, int Axis> struct selector;
-}
+
+    namespace axis
+    {
+        struct selection
+        {
+            selection() {}
+            selection(int lower, int upper, int skips) : lower(lower), upper(upper), skips(skips) {}
+            operator std::tuple<int, int, int>() { return std::make_tuple(lower, upper, skips); }
+            int lower = 0, upper = 0, skips = 1;
+        };
+
+
+        struct range
+        {
+            range() {}
+            range(int lower, int upper) : lower(lower), upper(upper) {}
+            selection operator|(int skips) const { return selection(lower, upper, skips); }
+            operator std::tuple<int, int>() { return std::make_tuple(lower, upper); }
+            int lower = 0, upper = 0;
+        };
+
+
+        struct index
+        {
+            index() {}
+            index(int lower) : lower(lower) {}
+            range operator|(int upper) const { return range(lower, upper); }
+            operator int() { return lower; }
+            int lower = 0;
+        };
+
+
+        struct all
+        {
+            index operator|(int lower) { return index(lower); }
+            operator std::tuple<>() { return std::make_tuple(); }
+        };
+    }
+} // ND_NAMESPACE_END
 
 
 
 
 // ============================================================================
-template<int Rank, int Axis = 0>
+template<int Rank, int Axis = 0> // ND_CLASS_START
 struct nd::selector
 {
 
@@ -336,7 +374,7 @@ struct nd::selector
     // ========================================================================
     template<int other_rank, int other_axis>
     friend class selector;
-};
+}; // ND_CLASS_END
 
 
 
