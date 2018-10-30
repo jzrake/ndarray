@@ -299,7 +299,7 @@ struct nd::selector
     }
 
     template<typename... Index>
-    bool contains(Index... index)
+    bool contains(Index... index) const
     {
         static_assert(sizeof...(Index) == rank, "selector: index size must match rank");
 

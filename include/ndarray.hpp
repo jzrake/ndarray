@@ -82,6 +82,7 @@ namespace nd
     template<typename T, typename U, int R, typename Op> class binary_op;
     template<typename T, int R, typename Op> class unary_op;
     template<typename T, int R> class ndarray;
+    template<typename T, int R> class const_ndarray;
     template<typename T> struct dtype_str;
 
     template<typename T> ndarray<T, 1> arange(int size);
@@ -378,7 +379,7 @@ struct nd::selector
     }
 
     template<typename... Index>
-    bool contains(Index... index)
+    bool contains(Index... index) const
     {
         static_assert(sizeof...(Index) == rank, "selector: index size must match rank");
 
@@ -822,7 +823,7 @@ public:
     ndarray(std::initializer_list<T> elements)
     : sel({elements.size()})
     , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
-    , strides({1})
+    , strides(sel.strides())
     {
     }
 
@@ -1016,6 +1017,23 @@ public:
 
         auto S = sel.select(index...);
         return ndarray<T, S.rank>(S.reset(), buf);
+    }
+
+    template<typename... Index>
+    const auto select(Index... index) const
+    {
+        if (! sel.contains(index...))
+            throw std::out_of_range("ndarray: selection out of range");
+
+        auto S = sel.select(index...);
+        auto d = std::make_shared<buffer<T>>(S.size());
+        auto a = d->begin();
+        auto b = begin();
+
+        for ( ; a != d->end(); ++a, ++b)
+            *a = *b;
+
+        return ndarray<T, S.rank>(S.reset(), d);
     }
 
     operator T() const

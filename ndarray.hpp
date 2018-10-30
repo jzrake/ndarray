@@ -15,6 +15,7 @@ namespace nd // ND_API_START
     template<typename T, typename U, int R, typename Op> class binary_op;
     template<typename T, int R, typename Op> class unary_op;
     template<typename T, int R> class ndarray;
+    template<typename T, int R> class const_ndarray;
     template<typename T> struct dtype_str;
 
     template<typename T> ndarray<T, 1> arange(int size);
@@ -190,7 +191,7 @@ public:
     ndarray(std::initializer_list<T> elements)
     : sel({elements.size()})
     , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
-    , strides({1})
+    , strides(sel.strides())
     {
     }
 
@@ -384,6 +385,23 @@ public:
 
         auto S = sel.select(index...);
         return ndarray<T, S.rank>(S.reset(), buf);
+    }
+
+    template<typename... Index>
+    const auto select(Index... index) const
+    {
+        if (! sel.contains(index...))
+            throw std::out_of_range("ndarray: selection out of range");
+
+        auto S = sel.select(index...);
+        auto d = std::make_shared<buffer<T>>(S.size());
+        auto a = d->begin();
+        auto b = begin();
+
+        for ( ; a != d->end(); ++a, ++b)
+            *a = *b;
+
+        return ndarray<T, S.rank>(S.reset(), d);
     }
 
     operator T() const
@@ -685,6 +703,16 @@ private:
 
 
 // ============================================================================
+template<typename T, int R>
+class nd::const_ndarray: public nd::ndarray<T, R>
+{
+
+};
+
+
+
+
+// ============================================================================
 #ifdef TEST_NDARRAY
 #include "catch.hpp"
 using T = double;
@@ -754,13 +782,16 @@ TEST_CASE("ndarray can be copied and casted", "[ndarray]")
 }
 
 
-TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarray] [TEST]")
+TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarray]")
 {
+    auto _ = nd::axis::all();
+
     SECTION("Works for non-const ndarray")
     {
         auto A = nd::ndarray<int, 3>(10, 12, 14);
         REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
         REQUIRE(A[0].shares(A));
+        REQUIRE(A.select(_|0|10, _|0|12, _|0|14).shares(A));
     }
 
     SECTION("Works for const ndarray")
@@ -768,6 +799,10 @@ TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarr
         const auto A = nd::ndarray<int, 3>(10, 12, 14);
         REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
         REQUIRE_FALSE(A[0].shares(A));
+        REQUIRE_FALSE(A.select(_|0|10, _|0|12, _|0|14).shares(A));
+
+        // Should fail to compile:
+        // A.select(_|0|10, _|0|12, _|0|14) = 1.0;
     }
 }
 
