@@ -26,14 +26,17 @@ struct nd::selector
 
 
     // ========================================================================
+    selector() {}
+
     template<typename... Dims>
-    selector(Dims... dims)
+    selector(Dims... dims) : selector(std::array<int, rank>{dims...})
     {
         static_assert(sizeof...(Dims) == rank,
             "selector: number of count arguments must match rank");
+    }
 
-        count = {dims...};
-
+    selector(std::array<int, rank> count) : count(count)
+    {
         for (int n = 0; n < rank; ++n)
         {
             start[n] = 0;
@@ -207,6 +210,30 @@ struct nd::selector
             s[n] = (final[n] - start[n]) / skips[n];
         }
         return s;
+    }
+
+    bool empty() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (count[n] == 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool contiguous() const
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            if (start[n] != 0 || final[n] != count[n] || skips[n] != 1)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     int size() const

@@ -7,7 +7,7 @@
 #include "buffer.hpp"
 
 
-
+#include <iostream>
 
 // ============================================================================
 #ifndef NDARRAY_NO_EXCEPTIONS
@@ -196,12 +196,9 @@ public:
 
     template<int Rank = R, typename = typename std::enable_if<Rank == 1>::type>
     ndarray(std::initializer_list<T> elements)
-    : count({int(elements.size())})
-    , start({0})
-    , final({int(elements.size())})
-    , skips({1})
-    , strides({1})
+    : sel({elements.size()})
     , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
+    , strides({1})
     {
     }
 
@@ -213,13 +210,10 @@ public:
     }
 
     template<typename SelectorType>
-    ndarray(SelectorType selector, std::shared_ptr<buffer<T>>& buf)
-    : count(selector.count)
-    , start(selector.start)
-    , final(selector.final)
-    , skips(selector.skips)
-    , strides(compute_strides(count))
+    ndarray(SelectorType sel, std::shared_ptr<buffer<T>>& buf)
+    : sel(sel)
     , buf(buf)
+    , strides(sel.strides())
     {
     }
 
@@ -228,51 +222,24 @@ public:
     }
 
     ndarray(std::array<int, R> dim_sizes)
-    : count(dim_sizes)
-    , start(constant_array<rank>(0))
-    , final(dim_sizes)
-    , skips(constant_array<rank>(1))
-    , strides(compute_strides(count))
-    , buf(std::make_shared<buffer<T>>(product(dim_sizes)))
+    : sel(dim_sizes)
+    , buf(std::make_shared<buffer<T>>(sel.size()))
+    , strides(sel.strides())
     {
     }
 
     ndarray(std::array<int, R> dim_sizes, std::shared_ptr<buffer<T>>& buf)
-    : count(dim_sizes)
-    , start(constant_array<rank>(0))
-    , final(dim_sizes)
-    , skips(constant_array<rank>(1))
-    , strides(compute_strides(count))
+    : sel(dim_sizes)
     , buf(buf)
+    , strides(sel.strides())
     {
-        NDARRAY_ASSERT_VALID_ARGUMENT(
-            buf->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
-            "Size of data buffer is not the product of dim sizes");
-    }
-
-    ndarray(
-        std::array<int, R> count,
-        std::array<int, R> start,
-        std::array<int, R> final,
-        std::shared_ptr<buffer<T>>& buf)
-    : count(count)
-    , start(start)
-    , final(final)
-    , skips(constant_array<rank>(1))
-    , strides(compute_strides(count))
-    , buf(buf)
-    {
-        NDARRAY_ASSERT_VALID_ARGUMENT(
-            buf->size() == std::accumulate(count.begin(), count.end(), 1, std::multiplies<>()),
+        NDARRAY_ASSERT_VALID_ARGUMENT(buf->size() == sel.size(),
             "Size of data buffer is not the product of dim sizes");
     }
 
     ndarray(const ndarray<T, R>& other)
-    : count(other.shape())
-    , start(constant_array<rank>(0))
-    , final(other.shape())
-    , skips(constant_array<rank>(1))
-    , strides(compute_strides(count))
+    : sel(other.sel.shape())
+    , strides(sel.strides())
     , buf(std::make_shared<buffer<T>>(size()))
     {
         *this = other;
@@ -294,9 +261,8 @@ public:
     ndarray<T, R>& operator=(T value)
     {
         for (auto& a : *this)
-        {
             a = value;
-        }
+
         return *this;
     }
 
@@ -309,19 +275,15 @@ public:
         auto b = other.begin();
 
         for (; a != end(); ++a, ++b)
-        {
             *a = *b;
-        }
+
         return *this;
     }
 
     void become(ndarray<T, R>& other)
     {
-        count = other.count;
-        start = other.start;
-        final = other.final;
-        skips = other.skips;
         strides = other.strides;
+        sel = other.sel;
         buf = other.buf;
     }
 
@@ -346,32 +308,10 @@ public:
      * 
      */
     // ========================================================================
-    auto size() const { return make_selector().size(); }
-    auto shape() const { return make_selector().shape(); }
-
-    bool empty() const
-    {
-        for (int n = 0; n < rank; ++n)
-        {
-            if (count[n] == 0)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool contiguous() const
-    {
-        for (int n = 0; n < rank; ++n)
-        {
-            if (start[n] != 0 || final[n] != count[n] || skips[n] != 1)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
+    auto size() const { return sel.size(); }
+    auto shape() const { return sel.shape(); }
+    bool empty() const { return sel.empty(); }
+    bool contiguous() const { return sel.contiguous(); }
 
 
 
@@ -384,7 +324,7 @@ public:
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
-        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+        if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
         return {offset_relative({index}), buf};
@@ -393,7 +333,7 @@ public:
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index) const
     {
-        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+        if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
         auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
@@ -403,34 +343,33 @@ public:
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
-        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+        if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        return {make_selector().select(index), buf};
+        return {sel.select(index), buf};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
     ndarray<T, R - 1> operator[](int index) const
     {
-        if (index < 0 || index >= (start[0] - final[0]) / skips[0])
+        if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto S = make_selector().collapse(index);
+        auto S = sel.collapse(index);
         auto d = std::make_shared<buffer<T>>(S.size());
         auto a = d->begin();
         auto b = begin();
 
         for ( ; a != d->end(); ++a, ++b)
-        {
             *a = *b;
-        }
+
         return {S, d};
     }
 
     template<typename... Index>
     T& operator()(Index... index)
     {
-        if (! make_selector().contains(index...))
+        if (! sel.contains(index...))
             throw std::out_of_range("ndarray: index out of range");
 
         return buf->operator[](offset_relative({index...}));
@@ -439,7 +378,7 @@ public:
     template<typename... Index>
     const T& operator()(Index... index) const
     {
-        if (! make_selector().contains(index...))
+        if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
         return buf->operator[](offset_relative({index...}));
@@ -448,11 +387,11 @@ public:
     template<typename... Index>
     auto select(Index... index)
     {
-        if (! make_selector().contains(index...))
+        if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
-        auto S = make_selector().select(index...);
-        return ndarray<T, S.rank>(S, buf);
+        auto S = sel.select(index...);
+        return ndarray<T, S.rank>(S.reset(), buf);
     }
 
     operator T() const
@@ -493,7 +432,8 @@ public:
     template<typename U> struct OpMinus      { auto operator()(T a, U b) const { return a - b; } };
     template<typename U> struct OpMultiplies { auto operator()(T a, U b) const { return a * b; } };
     template<typename U> struct OpDivides    { auto operator()(T a, U b) const { return a / b; } };
-    struct OpNegate { auto operator()(T a) const { return ! a; } };
+    struct OpIdentity { auto operator()(T a) const { return a; } };
+    struct OpNegate   { auto operator()(T a) const { return ! a; } };
 
 
 
@@ -507,17 +447,15 @@ public:
     template<typename U> auto& operator-=(U b) { for (auto& a : *this) { a -= b; } return *this; }
     template<typename U> auto& operator*=(U b) { for (auto& a : *this) { a *= b; } return *this; }
     template<typename U> auto& operator/=(U b) { for (auto& a : *this) { a /= b; } return *this; }
-
-    template<typename U> auto operator+(U b) const { auto A = copy(); for (auto& a : A) { a += b; } return A; }
-    template<typename U> auto operator-(U b) const { auto A = copy(); for (auto& a : A) { a -= b; } return A; }
-    template<typename U> auto operator*(U b) const { auto A = copy(); for (auto& a : A) { a *= b; } return A; }
-    template<typename U> auto operator/(U b) const { auto A = copy(); for (auto& a : A) { a /= b; } return A; }
-
     template<typename U> auto& operator+=(const ndarray<U, R>& B) { binary_op<T, U, R, OpPlus      <U>>::perform(*this, B); return *this; }
     template<typename U> auto& operator-=(const ndarray<U, R>& B) { binary_op<T, U, R, OpMinus     <U>>::perform(*this, B); return *this; }
     template<typename U> auto& operator*=(const ndarray<U, R>& B) { binary_op<T, U, R, OpMultiplies<U>>::perform(*this, B); return *this; }
     template<typename U> auto& operator/=(const ndarray<U, R>& B) { binary_op<T, U, R, OpDivides   <U>>::perform(*this, B); return *this; }
 
+    template<typename U> auto operator+(U b) const { auto A = copy(); for (auto& a : A) { a += b; } return A; }
+    template<typename U> auto operator-(U b) const { auto A = copy(); for (auto& a : A) { a -= b; } return A; }
+    template<typename U> auto operator*(U b) const { auto A = copy(); for (auto& a : A) { a *= b; } return A; }
+    template<typename U> auto operator/(U b) const { auto A = copy(); for (auto& a : A) { a /= b; } return A; }
     template<typename U> auto operator+(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpPlus      <U>>::perform(*this, B); }
     template<typename U> auto operator-(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpMinus     <U>>::perform(*this, B); }
     template<typename U> auto operator*(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpMultiplies<U>>::perform(*this, B); }
@@ -540,11 +478,8 @@ public:
     bool is(const ndarray<T, R>& other) const
     {
         return (scalar_offset == other.scalar_offset
-        && count == other.count
-        && start == other.start
-        && final == other.final
-        && skips == other.skips
         && strides == other.strides
+        && sel == other.sel
         && buf == other.buf);
     }
 
@@ -579,8 +514,8 @@ public:
         ndarray<T, R>& array;
     };
 
-    iterator begin() { return {*this, make_selector().begin()}; }
-    iterator end() { return {*this, make_selector().end()}; }
+    iterator begin() { return {*this, sel.begin()}; }
+    iterator end() { return {*this, sel.end()}; }
 
 
 
@@ -607,8 +542,8 @@ public:
         const ndarray<T, R>& array;
     };
 
-    const_iterator begin() const { return {*this, make_selector().begin()}; }
-    const_iterator end() const { return {*this, make_selector().end()}; }
+    const_iterator begin() const { return {*this, sel.begin()}; }
+    const_iterator end() const { return {*this, sel.end()}; }
 
 
 
@@ -691,7 +626,7 @@ private:
 
         for (int n = 0; n < rank; ++n)
         {
-            m += start[n] + skips[n] * index[n] * strides[n];
+            m += sel.start[n] + sel.skips[n] * index[n] * strides[n];
         }
         return m;
     }
@@ -707,39 +642,12 @@ private:
         return m;
     }
 
-    selector<rank> make_selector() const
-    {
-        return selector<rank>{count, start, final, skips};
-    }
-
-    template <int Rank = R, typename std::enable_if_t<Rank == 0>* = nullptr>
-    static std::array<int, R> compute_strides(std::array<int, R> count)
-    {
-        return std::array<int, R>();
-    }
-
-    template <int Rank = R, typename std::enable_if_t<Rank != 0>* = nullptr>
-    static std::array<int, R> compute_strides(std::array<int, R> count)
-    {
-        return selector<rank>(
-            count,
-            constant_array<rank>(0),
-            count,
-            constant_array<rank>(1)).strides();
-    }
-
     template<int length>
     static std::array<int, length> constant_array(T value)
     {
         std::array<int, length> A;
         for (auto& a : A) a = value;
         return A;
-    }
-
-    template<typename C>
-    static size_t product(const C& c)
-    {
-        return std::accumulate(c.begin(), c.end(), 1, std::multiplies<>());
     }
 
 
@@ -751,12 +659,9 @@ private:
      */
     // ========================================================================
     int scalar_offset = 0;
-    std::array<int, R> count;
-    std::array<int, R> start;
-    std::array<int, R> final;
-    std::array<int, R> skips;
-    std::array<int, R> strides;
+    selector<R> sel;
     std::shared_ptr<buffer<T>> buf;
+    std::array<int, R> strides;
 
 
 
@@ -840,6 +745,26 @@ TEST_CASE("ndarray can be copied and casted", "[ndarray]")
     REQUIRE(B(1) == C(1));
     REQUIRE_FALSE(A.copy().shares(A));
     REQUIRE_FALSE(C.shares(B));
+}
+
+
+TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarray] [TEST]")
+{
+    SECTION("Works for non-const ndarray")
+    {
+        REQUIRE(selector<2>(3, 4).select(0, std::make_tuple(0, 4)).shape()[0] == 4);
+
+        // auto A = nd::ndarray<int, 2>(3, 4);
+        // REQUIRE(A[0].shape() == std::array<int, 1>{4});
+        // REQUIRE(A[0].shares(A));
+    }
+
+    SECTION("Works for const ndarray")
+    {
+        // const auto A = nd::ndarray<int, 3>(10, 12, 14);
+        // REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
+        // REQUIRE_FALSE(A[0].shares(A));
+    }
 }
 
 
