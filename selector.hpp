@@ -115,7 +115,7 @@ struct nd::selector
 
         _count[axis] = count[axis + 1] * count[axis];
         _start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
-        _final[axis] = count[axis + 1] * final[axis] + final[axis + 1];
+        _final[axis] = count[axis + 1] * final[axis]; // + final[axis + 1];
         _skips[axis] = 1;
 
         return {_count, _start, _final, _skips};
@@ -413,6 +413,15 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(std::make_tuple(0, 2), 0).final     == std::array<int, 1>{2 * 4 + 1});
         CHECK(S.select(std::make_tuple(0, 2), 0).strides() == std::array<int, 1>{4});
         CHECK(S.select(std::make_tuple(0, 2), 0).shape()   == std::array<int, 1>{2});
+    }
+
+    SECTION("Selections collapsing only axis 0 have the correct count, stride, and shape")
+    {
+        CHECK(S.select(0).count == std::array<int, 1>{3 * 4});
+        CHECK(S.select(0).start == std::array<int, 1>{0});
+        CHECK(S.select(0).final == std::array<int, 1>{4});
+        CHECK(S.select(0).strides() == std::array<int, 1>{1});
+        CHECK(S.select(0).shape()   == std::array<int, 1>{4});
     }
 }
 

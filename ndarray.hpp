@@ -355,7 +355,7 @@ public:
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto S = sel.collapse(index);
+        auto S = sel.select(index);
         auto d = std::make_shared<buffer<T>>(S.size());
         auto a = d->begin();
         auto b = begin();
@@ -752,18 +752,16 @@ TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarr
 {
     SECTION("Works for non-const ndarray")
     {
-        REQUIRE(selector<2>(3, 4).select(0, std::make_tuple(0, 4)).shape()[0] == 4);
-
-        // auto A = nd::ndarray<int, 2>(3, 4);
-        // REQUIRE(A[0].shape() == std::array<int, 1>{4});
-        // REQUIRE(A[0].shares(A));
+        auto A = nd::ndarray<int, 3>(10, 12, 14);
+        REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
+        REQUIRE(A[0].shares(A));
     }
 
     SECTION("Works for const ndarray")
     {
-        // const auto A = nd::ndarray<int, 3>(10, 12, 14);
-        // REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
-        // REQUIRE_FALSE(A[0].shares(A));
+        const auto A = nd::ndarray<int, 3>(10, 12, 14);
+        REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
+        REQUIRE_FALSE(A[0].shares(A));
     }
 }
 
