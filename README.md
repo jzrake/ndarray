@@ -21,10 +21,10 @@ The code should be transparent enough that you can modify it without much troubl
 ```C++
   // Basic usage:
 
-  ndarray<3> A(100, 200, 10);
-  ndarray<2> B = A[0]; // B.shape() == {200, 10}; B.shares(A);
-  ndarray<1> C = B[0]; // C.shape() == {10}; C.shares(B);
-  ndarray<0> D = C[0]; // D.shape() == {}; D.shares(C);
+  nd::ndarray<int, 3> A(100, 200, 10);
+  nd::ndarray<int, 2> B = A[0]; // B.shape() == {200, 10}; B.shares(A);
+  nd::ndarray<int, 1> C = B[0]; // C.shape() == {10}; C.shares(B);
+  nd::ndarray<0> D = C[0]; // D.shape() == {}; D.shares(C);
   double d = D; // rank-0 arrays cast to underlying scalar type
   double e = A[0][0][0]; // d == e (slow)
   double f = A(0, 0, 0); // e == f (fast)
@@ -34,7 +34,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```C++
   // Creating a 1D array from an initializer list
 
-  auto A = ndarray<1>{0, 1, 2, 3};
+  auto A = nd::ndarray<double, 1>{0, 1, 2, 3};
   A(0) = 3.0;
   A(1) = 2.0;
 ```
@@ -43,8 +43,11 @@ The code should be transparent enough that you can modify it without much troubl
 ```C++
   // Multi-dimensional selections
 
-  auto A = ndarray<3>(100, 200, 10);
+  auto A = nd::ndarray<int, 3>(100, 200, 10);
   auto B = A.select(0, std::make_tuple(100, 150), 0); // A.rank == 1; A.shares(B);
+  
+  auto _ = nd::axis::all();
+  auto C = A.select(0, _|100|150, 0); // (B == C).all();
 ```
 
 
@@ -52,7 +55,7 @@ The code should be transparent enough that you can modify it without much troubl
   // STL-compatible iteration
 
   auto x = 0.0;
-  auto A = ndarray<3>(100, 200, 10);
+  auto A = nd::ndarray<double, 3>(100, 200, 10);
 
   for (auto &a : A[50])
   {
@@ -67,14 +70,14 @@ The code should be transparent enough that you can modify it without much troubl
 
   // If A is non-const, then
   {
-    ndarray<1> A(100); // A[0].shares(A);
+    nd::ndarray<double, 1> A(100); // A[0].shares(A);
     A(0) = 1.0; // OK
-    ndarray<1> B = A; // B.is(A);
+    nd::ndarray<double, 1> B = A; // B.is(A);
   }
 
   // whereas if A is const,
   {
-    const ndarray<1> A(100); // ! A[0].shares(A);
+    const nd::ndarray<double, 1> A(100); // ! A[0].shares(A);
     // A(0) = 1.0; // compile error
     ndarray<1> B = A; // ! B.is(A);
   }
