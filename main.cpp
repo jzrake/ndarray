@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include "include/ndarray.hpp"
 
 
@@ -8,6 +9,7 @@ int main()
 {
     auto S = nd::selector<2>(3, 4);
     auto I = std::array<int, 2>{0, 0};
+    auto _ = nd::axis::all();
 
     nd::ndarray<double, 1> A(10);
 
@@ -25,10 +27,11 @@ int main()
     }
 
     auto C = (A + A) * nd::ones<int>(10);
-
-    auto _ = nd::axis::all();
     auto D = C.select(_);
     std::cout << "This should be size 10, but I don't know why it works! " << D.size() << std::endl;
+
+    std::ofstream("float64-345.bin") << nd::ndarray<double, 3>(3, 4, 5).dumps();
+    std::ofstream("int32-88.bin") << nd::arange<int>(64).reshape(8, 8).dumps();
 
     return 0;
 }

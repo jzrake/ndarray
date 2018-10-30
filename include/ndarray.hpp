@@ -1210,6 +1210,7 @@ public:
     // ========================================================================
     std::string dumps() const
     {
+        // dtype ... 8 char's
         // rank  ... 1 int
         // shape ... rank int's
         // data  ... size T's
