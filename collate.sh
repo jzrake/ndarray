@@ -1,21 +1,9 @@
 #!/bin/bash
 
-
-
 cat << EOF
 #pragma once
 #include <array>
 #include <numeric>
-
-
-
-
-// ============================================================================
-#ifndef NDARRAY_NO_EXCEPTIONS
-#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) throw std::invalid_argument(message); } while(0)
-#else
-#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) std::terminate(); } while(0)
-#endif
 EOF
 
 

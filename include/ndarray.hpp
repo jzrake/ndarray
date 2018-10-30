@@ -6,16 +6,6 @@
 
 
 // ============================================================================
-#ifndef NDARRAY_NO_EXCEPTIONS
-#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) throw std::invalid_argument(message); } while(0)
-#else
-#define NDARRAY_ASSERT_VALID_ARGUMENT(condition, message) do { if (! (condition)) std::terminate(); } while(0)
-#endif
-
-
-
-
-// ============================================================================
 namespace nd 
 {
     template<int Rank, int Axis> struct selector;
@@ -722,7 +712,8 @@ struct nd::binary_op
 {
     static auto perform(const ndarray<T, R>& A, const ndarray<U, R>& B)
     {
-        NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
+        if (A.shape() != B.shape())
+            throw std::invalid_argument("incompatible shapes for binary operation");
 
         auto op = Op();
         auto C = ndarray<decltype(op(T(), U())), R>(A.shape());
@@ -737,7 +728,8 @@ struct nd::binary_op
     }
     static void perform(ndarray<T, R>& A, const ndarray<U, R>& B)
     {
-        NDARRAY_ASSERT_VALID_ARGUMENT(A.shape() == B.shape(), "incompatible shapes for binary operation");
+        if (A.shape() != B.shape())
+            throw std::invalid_argument("incompatible shapes for binary operation");
 
         auto op = Op();
         auto a = A.begin();
@@ -836,7 +828,7 @@ public:
     , buf(buf)
     , strides(sel.strides())
     {
-        NDARRAY_ASSERT_VALID_ARGUMENT(buf->size() == sel.size(),
+        assert_valid_argument(buf->size() == sel.size(),
             "Size of data buffer is not the product of dim sizes");
     }
 
@@ -871,7 +863,7 @@ public:
 
     ndarray<T, R>& operator=(const ndarray<T, R>& other)
     {
-        NDARRAY_ASSERT_VALID_ARGUMENT(shape() == other.shape(),
+        assert_valid_argument(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
 
         auto a = this->begin();
@@ -1194,20 +1186,20 @@ public:
         auto S = constant_array<rank>(0);
         auto x = T();
 
-        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(D) <= str.end(), "unexpected end of ndarray header string");
+        assert_valid_argument(it + sizeof(D) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&D, &*it, sizeof(D));
         it += sizeof(D);
 
-        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(Q) <= str.end(), "unexpected end of ndarray header string");
+        assert_valid_argument(it + sizeof(Q) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&Q, &*it, sizeof(Q));
         it += sizeof(Q);
 
-        NDARRAY_ASSERT_VALID_ARGUMENT(it + sizeof(S) <= str.end(), "unexpected end of ndarray header string");
+        assert_valid_argument(it + sizeof(S) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&S, &*it, sizeof(S));
         it += sizeof(S);
 
-        NDARRAY_ASSERT_VALID_ARGUMENT(D == dtype_str<T>::value, "ndarray string has wrong data type");
-        NDARRAY_ASSERT_VALID_ARGUMENT(Q == rank, "ndarray string has the wrong rank");
+        assert_valid_argument(D == dtype_str<T>::value, "ndarray string has wrong data type");
+        assert_valid_argument(Q == rank, "ndarray string has the wrong rank");
 
         auto size = std::accumulate(S.begin(), S.end(), 1, std::multiplies<>());
         auto wbuf = std::make_shared<buffer<T>>(size);
@@ -1215,7 +1207,7 @@ public:
 
         while (it != str.end())
         {
-            NDARRAY_ASSERT_VALID_ARGUMENT(dest != wbuf->end(), "unexpected end of ndarray data string");
+            assert_valid_argument(dest != wbuf->end(), "unexpected end of ndarray data string");
             std::memcpy(&*dest, &*it, sizeof(T));
             ++dest;
             it += sizeof(T);
@@ -1259,6 +1251,12 @@ private:
         std::array<int, length> A;
         for (auto& a : A) a = value;
         return A;
+    }
+
+    static void assert_valid_argument(bool condition, const char* message)
+    {
+        if (! condition)
+            throw std::invalid_argument(message);
     }
 
 
