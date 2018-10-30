@@ -58,6 +58,7 @@ namespace nd
         std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
         std::array<std::tuple<int, int>, 1> promote(axis::range range);
         std::array<std::tuple<int, int>, 1> promote(axis::index index);
+        std::array<std::tuple<int, int>, 1> promote(axis::all all);
         template<typename First> auto make_shape(First first);
         template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
         template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
@@ -82,7 +83,6 @@ namespace nd
     template<typename T, typename U, int R, typename Op> class binary_op;
     template<typename T, int R, typename Op> class unary_op;
     template<typename T, int R> class ndarray;
-    template<typename T, int R> class const_ndarray;
     template<typename T> struct dtype_str;
 
     template<typename T> ndarray<T, 1> arange(int size);
@@ -474,6 +474,11 @@ std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::range range)
 std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::index index)
 {
     return {std::make_tuple(index.lower, index.lower + 1)};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all all)
+{
+    return {std::make_tuple(0, -1)};
 }
 
 template<typename First>

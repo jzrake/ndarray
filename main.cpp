@@ -9,12 +9,6 @@ int main()
     auto S = nd::selector<2>(3, 4);
     auto I = std::array<int, 2>{0, 0};
 
-
-    while (S.next(I))
-    {
-        std::cout << I[0] << " " << I[1] << std::endl;
-    }
-
     nd::ndarray<double, 1> A(10);
 
     for (int i = 0; i < A.size(); ++i)
@@ -31,5 +25,10 @@ int main()
     }
 
     auto C = (A + A) * nd::ones<int>(10);
+
+    auto _ = nd::axis::all();
+    auto D = C.select(_);
+    std::cout << "This should be size 10, but I don't know why it works! " << D.size() << std::endl;
+
     return 0;
 }

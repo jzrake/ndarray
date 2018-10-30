@@ -49,6 +49,7 @@ namespace nd // ND_API_START
         std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
         std::array<std::tuple<int, int>, 1> promote(axis::range range);
         std::array<std::tuple<int, int>, 1> promote(axis::index index);
+        std::array<std::tuple<int, int>, 1> promote(axis::all all);
         template<typename First> auto make_shape(First first);
         template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
         template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
@@ -93,6 +94,11 @@ std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::range range)
 std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::index index)
 {
     return {std::make_tuple(index.lower, index.lower + 1)};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all all)
+{
+    return {std::make_tuple(0, -1)};
 }
 
 template<typename First>

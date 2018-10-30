@@ -15,7 +15,6 @@ namespace nd // ND_API_START
     template<typename T, typename U, int R, typename Op> class binary_op;
     template<typename T, int R, typename Op> class unary_op;
     template<typename T, int R> class ndarray;
-    template<typename T, int R> class const_ndarray;
     template<typename T> struct dtype_str;
 
     template<typename T> ndarray<T, 1> arange(int size);
@@ -698,16 +697,6 @@ private:
     friend class ndarray;
     friend class iterator;
 }; // ND_IMPL_END
-
-
-
-
-// ============================================================================
-template<typename T, int R>
-class nd::const_ndarray: public nd::ndarray<T, R>
-{
-
-};
 
 
 
