@@ -9,44 +9,6 @@
 namespace nd 
 {
     template<int Rank, int Axis> struct selector;
-
-    namespace axis
-    {
-        struct selection
-        {
-            selection() {}
-            selection(int lower, int upper, int skips) : lower(lower), upper(upper), skips(skips) {}
-            operator std::tuple<int, int, int>() { return std::make_tuple(lower, upper, skips); }
-            int lower = 0, upper = 0, skips = 1;
-        };
-
-
-        struct range
-        {
-            range() {}
-            range(int lower, int upper) : lower(lower), upper(upper) {}
-            selection operator|(int skips) const { return selection(lower, upper, skips); }
-            operator std::tuple<int, int>() { return std::make_tuple(lower, upper); }
-            int lower = 0, upper = 0;
-        };
-
-
-        struct index
-        {
-            index() {}
-            index(int lower) : lower(lower) {}
-            range operator|(int upper) const { return range(lower, upper); }
-            operator int() { return lower; }
-            int lower = 0;
-        };
-
-
-        struct all
-        {
-            index operator|(int lower) { return index(lower); }
-            operator std::tuple<>() { return std::make_tuple(); }
-        };
-    }
 } 
 
 
@@ -55,13 +17,47 @@ namespace nd
 // ============================================================================
 namespace nd 
 {
+    namespace axis
+    {
+        struct selection
+        {
+            selection() {}
+            selection(int lower, int upper, int skips) : lower(lower), upper(upper), skips(skips) {}
+            int lower = 0, upper = 0, skips = 1;
+        };
+
+        struct range
+        {
+            range() {}
+            range(int lower, int upper) : lower(lower), upper(upper) {}
+            selection operator|(int skips) const { return selection(lower, upper, skips); }
+            int lower = 0, upper = 0;
+        };
+
+        struct index
+        {
+            index() {}
+            index(int lower) : lower(lower) {}
+            range operator|(int upper) const { return range(lower, upper); }
+            int lower = 0;
+        };
+
+        struct all
+        {
+            index operator|(int lower) { return index(lower); }
+        };
+    }
+
     namespace shape
     {
         template<unsigned long rank>
         std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
         std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
         std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
-        std::array<std::tuple<int, int>, 1> promote(int start_index);
+        std::array<std::tuple<int, int>, 1> promote(int index);
+        std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
+        std::array<std::tuple<int, int>, 1> promote(axis::range range);
+        std::array<std::tuple<int, int>, 1> promote(axis::index index);
         template<typename First> auto make_shape(First first);
         template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
         template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
@@ -204,22 +200,12 @@ struct nd::selector
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> range(int start_index, int final_index) const
-    {
-        return select(std::make_tuple(start_index, final_index, 1));
-    }
-
     selector<rank, axis + 1> skip(int skips_index) const
     {
         return select(std::make_tuple(start[axis], final[axis], skips_index));
     }
 
-    selector<rank, axis + 1> slice(int start_index, int final_index, int skips_index) const
-    {
-        return select(std::make_tuple(start_index, final_index, skips_index));
-    }
-
-    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
+    selector<rank, axis + 1> slice(int lower_index, int upper_index, int skips_index) const
     {
         static_assert(axis < rank, "selector: cannot select on axis >= rank");
 
@@ -228,21 +214,49 @@ struct nd::selector
         auto _final = final;
         auto _skips = skips;
 
-        _start[axis] = start[axis] + std::get<0>(selection);
-        _final[axis] = start[axis] + std::get<1>(selection);
-        _skips[axis] = skips[axis] * std::get<2>(selection);
+        _start[axis] = start[axis] + lower_index;
+        _final[axis] = start[axis] + upper_index;
+        _skips[axis] = skips[axis] * skips_index;
 
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> select(std::tuple<int, int> start_final) const
+    selector<rank, axis + 1> select(axis::selection selection) const
     {
-        return range(std::get<0>(start_final), std::get<1>(start_final));
+        return slice(selection.lower, selection.upper, selection.skips);
     }
 
-    auto select(int start_index) const
+    selector<rank, axis + 1> select(axis::range range) const
     {
-        return range(start_index, start_index + 1).drop().collapse();
+        return slice(range.lower, range.upper, 1);
+    }
+
+    auto select(axis::index index) const
+    {
+        return slice(index.lower);
+    }
+
+    auto select(axis::all all) const
+    {
+        return *this;
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
+    {
+        return slice(
+            std::get<0>(selection),
+            std::get<1>(selection),
+            std::get<2>(selection));
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int> range) const
+    {
+        return slice(std::get<0>(range), std::get<1>(range), 1);
+    }
+
+    auto select(int index) const
+    {
+        return slice(index, index + 1, 1).drop().collapse();
     }
 
     template<typename First, typename... Rest>
@@ -444,6 +458,21 @@ std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> rang
 std::array<std::tuple<int, int>, 1> nd::shape::promote(int start_index)
 {
     return {std::make_tuple(start_index, start_index + 1)};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::selection selection)
+{
+    return {std::make_tuple(selection.lower, selection.upper)};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::range range)
+{
+    return {std::make_tuple(range.lower, range.upper)};
+}
+
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::index index)
+{
+    return {std::make_tuple(index.lower, index.lower + 1)};
 }
 
 template<typename First>

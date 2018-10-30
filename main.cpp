@@ -6,9 +6,6 @@
 
 int main()
 {
-    auto _ = nd::axis::all();
-    auto arr = nd::ndarray<double, 3>(10, 10, 10);
-    auto n = arr.select(int(_|0), int(_|0), int(_|0));
     auto S = nd::selector<2>(3, 4);
     auto I = std::array<int, 2>{0, 0};
 

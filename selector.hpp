@@ -11,44 +11,6 @@
 namespace nd // ND_API_START
 {
     template<int Rank, int Axis> struct selector;
-
-    namespace axis
-    {
-        struct selection
-        {
-            selection() {}
-            selection(int lower, int upper, int skips) : lower(lower), upper(upper), skips(skips) {}
-            operator std::tuple<int, int, int>() { return std::make_tuple(lower, upper, skips); }
-            int lower = 0, upper = 0, skips = 1;
-        };
-
-
-        struct range
-        {
-            range() {}
-            range(int lower, int upper) : lower(lower), upper(upper) {}
-            selection operator|(int skips) const { return selection(lower, upper, skips); }
-            operator std::tuple<int, int>() { return std::make_tuple(lower, upper); }
-            int lower = 0, upper = 0;
-        };
-
-
-        struct index
-        {
-            index() {}
-            index(int lower) : lower(lower) {}
-            range operator|(int upper) const { return range(lower, upper); }
-            operator int() { return lower; }
-            int lower = 0;
-        };
-
-
-        struct all
-        {
-            index operator|(int lower) { return index(lower); }
-            operator std::tuple<>() { return std::make_tuple(); }
-        };
-    }
 } // ND_API_END
 
 
@@ -159,22 +121,12 @@ struct nd::selector
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> range(int start_index, int final_index) const
-    {
-        return select(std::make_tuple(start_index, final_index, 1));
-    }
-
     selector<rank, axis + 1> skip(int skips_index) const
     {
         return select(std::make_tuple(start[axis], final[axis], skips_index));
     }
 
-    selector<rank, axis + 1> slice(int start_index, int final_index, int skips_index) const
-    {
-        return select(std::make_tuple(start_index, final_index, skips_index));
-    }
-
-    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
+    selector<rank, axis + 1> slice(int lower_index, int upper_index, int skips_index) const
     {
         static_assert(axis < rank, "selector: cannot select on axis >= rank");
 
@@ -183,21 +135,49 @@ struct nd::selector
         auto _final = final;
         auto _skips = skips;
 
-        _start[axis] = start[axis] + std::get<0>(selection);
-        _final[axis] = start[axis] + std::get<1>(selection);
-        _skips[axis] = skips[axis] * std::get<2>(selection);
+        _start[axis] = start[axis] + lower_index;
+        _final[axis] = start[axis] + upper_index;
+        _skips[axis] = skips[axis] * skips_index;
 
         return {_count, _start, _final, _skips};
     }
 
-    selector<rank, axis + 1> select(std::tuple<int, int> start_final) const
+    selector<rank, axis + 1> select(axis::selection selection) const
     {
-        return range(std::get<0>(start_final), std::get<1>(start_final));
+        return slice(selection.lower, selection.upper, selection.skips);
     }
 
-    auto select(int start_index) const
+    selector<rank, axis + 1> select(axis::range range) const
     {
-        return range(start_index, start_index + 1).drop().collapse();
+        return slice(range.lower, range.upper, 1);
+    }
+
+    auto select(axis::index index) const
+    {
+        return slice(index.lower);
+    }
+
+    auto select(axis::all all) const
+    {
+        return *this;
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
+    {
+        return slice(
+            std::get<0>(selection),
+            std::get<1>(selection),
+            std::get<2>(selection));
+    }
+
+    selector<rank, axis + 1> select(std::tuple<int, int> range) const
+    {
+        return slice(std::get<0>(range), std::get<1>(range), 1);
+    }
+
+    auto select(int index) const
+    {
+        return slice(index, index + 1, 1).drop().collapse();
     }
 
     template<typename First, typename... Rest>
@@ -516,7 +496,7 @@ TEST_CASE("selector<2> next advances properly", "[selector::next]")
 
 TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterator]")
 {
-    auto S = selector<2>(10, 10).range(2, 8).range(4, 6);    
+    auto S = selector<2>(10, 10).slice(2, 8, 1).slice(4, 6, 1);    
     auto I = std::array<int, 2>{2, 4};
 
     for (auto index : S)
