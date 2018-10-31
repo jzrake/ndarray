@@ -903,6 +903,14 @@ public:
      * 
      */
     // ========================================================================
+    template <int Rank = R, typename std::enable_if_t<Rank == 0>* = nullptr>
+    ndarray<T, R>& operator=(T value)
+    {
+        buf->operator[](scalar_offset) = value;
+        return *this;
+    }
+
+    template <int Rank = R, typename std::enable_if_t<Rank != 0>* = nullptr>
     ndarray<T, R>& operator=(T value)
     {
         for (auto& a : *this)
@@ -915,9 +923,7 @@ public:
     {
         assert_valid_argument(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
-
         copy_internal(*this, other);
-
         return *this;
     }
 
@@ -1094,8 +1100,8 @@ public:
     template<typename U> struct OpEquals     { auto operator()(T a, U b) const { return a == b; } };
     template<typename U> struct OpNotEquals  { auto operator()(T a, U b) const { return a != b; } };
     template<typename U> struct OpGreaterEq  { auto operator()(T a, U b) const { return a >= b; } };
-    template<typename U> struct OpGreater    { auto operator()(T a, U b) const { return a > b; } };
     template<typename U> struct OpLessEq     { auto operator()(T a, U b) const { return a <= b; } };
+    template<typename U> struct OpGreater    { auto operator()(T a, U b) const { return a > b; } };
     template<typename U> struct OpLess       { auto operator()(T a, U b) const { return a < b; } };
     template<typename U> struct OpPlus       { auto operator()(T a, U b) const { return a + b; } };
     template<typename U> struct OpMinus      { auto operator()(T a, U b) const { return a - b; } };
@@ -1141,15 +1147,15 @@ public:
     template<typename U> auto operator==(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, B); }
     template<typename U> auto operator!=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, B); }
     template<typename U> auto operator>=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreaterEq<U>>::perform(*this, B); }
-    template<typename U> auto operator> (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, B); }
     template<typename U> auto operator<=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, B); }
+    template<typename U> auto operator> (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, B); }
     template<typename U> auto operator< (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, B); }
 
     template<typename U> auto operator==(U b) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, b); }
     template<typename U> auto operator!=(U b) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, b); }
     template<typename U> auto operator>=(U b) const { return binary_op<T, U, R, OpGreaterEq<U>>::perform(*this, b); }
-    template<typename U> auto operator> (U b) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, b); }
     template<typename U> auto operator<=(U b) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, b); }
+    template<typename U> auto operator> (U b) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, b); }
     template<typename U> auto operator< (U b) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, b); }
 
     auto operator!() const { return unary_op<T, R, OpNegate>::perform(*this); }
@@ -1198,8 +1204,8 @@ public:
         ndarray<T, R>& array;
     };
 
-    iterator begin() { return {*this, sel.begin()}; }
-    iterator end() { return {*this, sel.end()}; }
+    iterator begin() { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.begin()}; }
+    iterator end()   { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.end()}; }
 
 
 
@@ -1226,8 +1232,8 @@ public:
         const ndarray<T, R>& array;
     };
 
-    const_iterator begin() const { return {*this, sel.begin()}; }
-    const_iterator end() const { return {*this, sel.end()}; }
+    const_iterator begin() const { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.begin()}; }
+    const_iterator end()   const { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.end()}; }
 
 
 

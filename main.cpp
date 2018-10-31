@@ -9,7 +9,6 @@ int main()
 {
     auto _ = nd::axis::all();
     auto S = nd::selector<2>(3, 4);
-    auto I = std::array<int, 2>{0, 0};
 
     nd::ndarray<double, 1> A(10);
 
@@ -32,6 +31,13 @@ int main()
 
     std::ofstream("float64-345.bin") << nd::ndarray<double, 3>(3, 4, 5).dumps();
     std::ofstream("int32-88.bin") << nd::arange<int>(64).reshape(8, 8).dumps();
+
+    auto I = nd::arange<int>(10).reshape(2, 5);
+
+    for (auto x : I[0])
+    {
+        std::cout << x << std::endl;
+    }
 
     return 0;
 }
