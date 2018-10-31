@@ -72,6 +72,7 @@ The code should be transparent enough that you can modify it without much troubl
   {
     nd::ndarray<double, 1> A(100); // A[0].shares(A);
     A(0) = 1.0; // OK
+    A.select(_|0|5) = 2.0; // OK
     nd::ndarray<double, 1> B = A; // B.is(A);
   }
 
@@ -79,6 +80,7 @@ The code should be transparent enough that you can modify it without much troubl
   {
     const nd::ndarray<double, 1> A(100); // ! A[0].shares(A);
     // A(0) = 1.0; // compile error
+    // A.select(_|0|5) = 2.0; // compile error
     ndarray<1> B = A; // ! B.is(A);
   }
 ```
@@ -100,13 +102,11 @@ The code should be transparent enough that you can modify it without much troubl
 - [x] Basic arithmetic operations
 - [x] Allow for skips along ndarray axes
 - [x] Support for comparison operators >=, <=, etc.
-- [ ] Indexing via boolean nd-mask arrays
-- [ ] Indexing via linear nd-index arrays
+- [ ] Indexing via linear selections, enabling e.g. A[A > 0] = ...
 - [ ] Relative indexing (negative counts backwards from end)
 - [ ] Array transpose (and general axis permutation)
 - [x] Factories: zeros, ones, arange
 - [ ] Custom allocators (allow e.g. numpy interoperability or user memory pool)
 - [x] Binary serialization
-- [x] Enable/disable use of C++ exceptions at compile time
 - [x] Bounds checking
 - [ ] Enable/disable bounds-checking at compile time
