@@ -337,7 +337,7 @@ public:
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
-    ndarray<T, R - 1> operator[](int index) const
+    const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
@@ -356,7 +356,7 @@ public:
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
-    ndarray<T, R - 1> operator[](int index) const
+    const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
@@ -818,6 +818,37 @@ TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarr
 
         // Should fail to compile:
         // A.select(_|0|10, _|0|12, _|0|14) = 1.0;
+    }
+
+    SECTION("Can assign to returned by ndarray<1>::operator[]")
+    {
+        auto A = nd::ndarray<int, 1>(2);
+        A[0] = 1;
+        A[1] = 2;
+        CHECK(A(0) == 1); // <-- this one fails currently
+        CHECK(A(1) == 2);
+    }
+
+    SECTION("Can assign to returned by ndarray<2>::operator[]")
+    {
+        auto A = nd::ndarray<int, 2>(2, 3);
+        A[0] = 1;
+        A[1] = 2;
+        CHECK(A(0, 0) == 1);
+        CHECK(A(1, 0) == 2);
+        CHECK((A[0] == 1).all());
+        CHECK((A[1] == 2).all());
+    }
+
+    SECTION("Can assign to returned by ndarray<3>::operator[]")
+    {
+        auto A = nd::ndarray<int, 3>(2, 3, 4);
+        A[0] = 1;
+        A[1] = 2;
+        CHECK(A(0, 0, 0) == 1);
+        CHECK(A(1, 0, 0) == 2);
+        CHECK((A[0] == 1).all());
+        CHECK((A[1] == 2).all());
     }
 }
 

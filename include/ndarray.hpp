@@ -976,7 +976,7 @@ public:
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
-    ndarray<T, R - 1> operator[](int index) const
+    const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
@@ -995,7 +995,7 @@ public:
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
-    ndarray<T, R - 1> operator[](int index) const
+    const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
