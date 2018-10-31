@@ -7,9 +7,9 @@
 
 int main()
 {
+    auto _ = nd::axis::all();
     auto S = nd::selector<2>(3, 4);
     auto I = std::array<int, 2>{0, 0};
-    auto _ = nd::axis::all();
 
     nd::ndarray<double, 1> A(10);
 

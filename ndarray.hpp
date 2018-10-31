@@ -123,6 +123,20 @@ struct nd::binary_op
 
         return C;
     }
+
+    static auto perform(const ndarray<T, R>& A, U b)
+    {
+        auto op = Op();
+        auto C = ndarray<decltype(op(T(), U())), R>(A.shape());
+        auto a = A.begin();
+        auto c = C.begin();
+
+        for (; a != A.end(); ++a, ++c)
+            *c = op(*a, b);
+
+        return C;
+    }
+
     static void perform(ndarray<T, R>& A, const ndarray<U, R>& B)
     {
         if (A.shape() != B.shape())
@@ -488,6 +502,14 @@ public:
     template<typename U> auto operator> (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, B); }
     template<typename U> auto operator<=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, B); }
     template<typename U> auto operator< (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, B); }
+
+    template<typename U> auto operator==(U b) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, b); }
+    template<typename U> auto operator!=(U b) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, b); }
+    template<typename U> auto operator>=(U b) const { return binary_op<T, U, R, OpGreaterEq<U>>::perform(*this, b); }
+    template<typename U> auto operator> (U b) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, b); }
+    template<typename U> auto operator<=(U b) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, b); }
+    template<typename U> auto operator< (U b) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, b); }
+
     auto operator!() const { return unary_op<T, R, OpNegate>::perform(*this); }
     bool any() const { for (auto x : *this) if (x) return true; return false; }
     bool all() const { for (auto x : *this) if (! x) return false; return true; }
@@ -525,6 +547,9 @@ public:
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
         T& operator*() { return array.buf->operator[](array.offset_absolute(*it)); }
+
+        auto index() const { return *it; }
+        ndarray<T, R>& get_array() const { return array; }
 
     private:
         typename selector<rank>::iterator it;
@@ -644,7 +669,7 @@ private:
 
         for (int n = 0; n < rank; ++n)
         {
-            m += sel.start[n] + sel.skips[n] * index[n] * strides[n];
+            m += (sel.start[n] + sel.skips[n] * index[n]) * strides[n];
         }
         return m;
     }
@@ -939,6 +964,26 @@ TEST_CASE("ndarrays can perform basic arithmetic", "[ndarray] [arithmetic]")
         REQUIRE((A + 1 == B).all());
         REQUIRE((A - 1 == B - 2).all());
         REQUIRE_FALSE((A - 1 == B + 2).any());
+    }
+}
+
+
+TEST_CASE("ndarrays can perform skipped assignments", "[ndarray]")
+{
+    auto _ = nd::axis::all();
+
+    SECTION("skipped assignment to ndarray<1> works as expected")
+    {
+        auto A = nd::ndarray<int, 1>(9);
+        A.select(_|0|9|3) = 1;
+        A.select(_|1|9|3) = 2;
+        A.select(_|2|9|3) = 3;
+        REQUIRE(A.select(_|0|9|3).size() == 3);
+        REQUIRE(A.select(_|1|9|3).size() == 3);
+        REQUIRE(A.select(_|2|9|3).size() == 3);
+        REQUIRE((A.select(_|0|9|3) == 1).all());
+        REQUIRE((A.select(_|1|9|3) == 2).all());
+        REQUIRE((A.select(_|2|9|3) == 3).all());
     }
 }
 

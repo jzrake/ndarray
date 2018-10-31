@@ -292,10 +292,10 @@ struct nd::selector
             s[n] = s[n + 1] * count[n + 1];
         }
 
-        for (int n = 0; n < rank; ++n)
-        {
-            s[n] *= skips[n];
-        }
+        // for (int n = 0; n < rank; ++n)
+        // {
+        //     s[n] *= skips[n];
+        // }
         return s;
     }
 
@@ -305,7 +305,8 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            s[n] = (final[n] - start[n]) / skips[n];
+            // s[n] = (final[n] - start[n]) / skips[n];
+            s[n] = final[n] / skips[n] - start[n] / skips[n];
         }
         return s;
     }
@@ -390,7 +391,7 @@ struct nd::selector
             auto start_index = std::get<0>(S[n]);
             auto final_index = std::get<1>(S[n]);
 
-            if (start_index < 0 || final_index > (final[n] - start[n]) / skips[n])
+            if (start_index < 0 || final_index > final[n] / skips[n] - start[n] / skips[n])
             {
                 return false;
             }
@@ -761,6 +762,20 @@ struct nd::binary_op
 
         return C;
     }
+
+    static auto perform(const ndarray<T, R>& A, U b)
+    {
+        auto op = Op();
+        auto C = ndarray<decltype(op(T(), U())), R>(A.shape());
+        auto a = A.begin();
+        auto c = C.begin();
+
+        for (; a != A.end(); ++a, ++c)
+            *c = op(*a, b);
+
+        return C;
+    }
+
     static void perform(ndarray<T, R>& A, const ndarray<U, R>& B)
     {
         if (A.shape() != B.shape())
@@ -1126,6 +1141,14 @@ public:
     template<typename U> auto operator> (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, B); }
     template<typename U> auto operator<=(const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, B); }
     template<typename U> auto operator< (const ndarray<U, R>& B) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, B); }
+
+    template<typename U> auto operator==(U b) const { return binary_op<T, U, R, OpEquals   <U>>::perform(*this, b); }
+    template<typename U> auto operator!=(U b) const { return binary_op<T, U, R, OpNotEquals<U>>::perform(*this, b); }
+    template<typename U> auto operator>=(U b) const { return binary_op<T, U, R, OpGreaterEq<U>>::perform(*this, b); }
+    template<typename U> auto operator> (U b) const { return binary_op<T, U, R, OpGreater  <U>>::perform(*this, b); }
+    template<typename U> auto operator<=(U b) const { return binary_op<T, U, R, OpLessEq   <U>>::perform(*this, b); }
+    template<typename U> auto operator< (U b) const { return binary_op<T, U, R, OpLess     <U>>::perform(*this, b); }
+
     auto operator!() const { return unary_op<T, R, OpNegate>::perform(*this); }
     bool any() const { for (auto x : *this) if (x) return true; return false; }
     bool all() const { for (auto x : *this) if (! x) return false; return true; }
@@ -1163,6 +1186,9 @@ public:
         bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
         bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
         T& operator*() { return array.buf->operator[](array.offset_absolute(*it)); }
+
+        auto index() const { return *it; }
+        ndarray<T, R>& get_array() const { return array; }
 
     private:
         typename selector<rank>::iterator it;
@@ -1282,7 +1308,7 @@ private:
 
         for (int n = 0; n < rank; ++n)
         {
-            m += sel.start[n] + sel.skips[n] * index[n] * strides[n];
+            m += (sel.start[n] + sel.skips[n] * index[n]) * strides[n];
         }
         return m;
     }

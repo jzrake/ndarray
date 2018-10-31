@@ -212,10 +212,10 @@ struct nd::selector
             s[n] = s[n + 1] * count[n + 1];
         }
 
-        for (int n = 0; n < rank; ++n)
-        {
-            s[n] *= skips[n];
-        }
+        // for (int n = 0; n < rank; ++n)
+        // {
+        //     s[n] *= skips[n];
+        // }
         return s;
     }
 
@@ -225,7 +225,8 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            s[n] = (final[n] - start[n]) / skips[n];
+            // s[n] = (final[n] - start[n]) / skips[n];
+            s[n] = final[n] / skips[n] - start[n] / skips[n];
         }
         return s;
     }
@@ -310,7 +311,7 @@ struct nd::selector
             auto start_index = std::get<0>(S[n]);
             auto final_index = std::get<1>(S[n]);
 
-            if (start_index < 0 || final_index > (final[n] - start[n]) / skips[n])
+            if (start_index < 0 || final_index > final[n] / skips[n] - start[n] / skips[n])
             {
                 return false;
             }
@@ -393,7 +394,7 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(1, std::make_tuple(0, 4)).count     == std::array<int, 1>{3 * 4});
         CHECK(S.select(1, std::make_tuple(0, 4)).start     == std::array<int, 1>{4});
         CHECK(S.select(1, std::make_tuple(0, 4)).final     == std::array<int, 1>{8});
-        CHECK(S.select(1, std::make_tuple(0, 4)).strides() == std::array<int, 1>{1});
+        CHECK(S.select(1, std::make_tuple(0, 4)).skips     == std::array<int, 1>{1});
         CHECK(S.select(1, std::make_tuple(0, 4)).shape()   == std::array<int, 1>{4});
     }
 
@@ -402,7 +403,7 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(0, std::make_tuple(0, 2)).count     == std::array<int, 1>{3 * 4});
         CHECK(S.select(0, std::make_tuple(0, 2)).start     == std::array<int, 1>{0});
         CHECK(S.select(0, std::make_tuple(0, 2)).final     == std::array<int, 1>{2});
-        CHECK(S.select(0, std::make_tuple(0, 2)).strides() == std::array<int, 1>{1});
+        CHECK(S.select(0, std::make_tuple(0, 2)).skips     == std::array<int, 1>{1});
         CHECK(S.select(0, std::make_tuple(0, 2)).shape()   == std::array<int, 1>{2});
     }
 
@@ -411,7 +412,7 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(std::make_tuple(0, 3), 0).count     == std::array<int, 1>{3 * 4});
         CHECK(S.select(std::make_tuple(0, 3), 0).start     == std::array<int, 1>{0});
         CHECK(S.select(std::make_tuple(0, 3), 0).final     == std::array<int, 1>{3 * 4 + 1});
-        CHECK(S.select(std::make_tuple(0, 3), 0).strides() == std::array<int, 1>{4});
+        CHECK(S.select(std::make_tuple(0, 3), 0).skips     == std::array<int, 1>{4});
         CHECK(S.select(std::make_tuple(0, 3), 0).shape()   == std::array<int, 1>{3});
     }
 
@@ -420,7 +421,7 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(std::make_tuple(0, 3), 1).count     == std::array<int, 1>{3 * 4});
         CHECK(S.select(std::make_tuple(0, 3), 1).start     == std::array<int, 1>{1});
         CHECK(S.select(std::make_tuple(0, 3), 1).final     == std::array<int, 1>{3 * 4 + 2});
-        CHECK(S.select(std::make_tuple(0, 3), 1).strides() == std::array<int, 1>{4});
+        CHECK(S.select(std::make_tuple(0, 3), 1).skips     == std::array<int, 1>{4});
         CHECK(S.select(std::make_tuple(0, 3), 1).shape()   == std::array<int, 1>{3});
     }
 
@@ -429,7 +430,7 @@ TEST_CASE("selector<2> does select-collapse operations correctly", "[selector::s
         CHECK(S.select(std::make_tuple(0, 2), 0).count     == std::array<int, 1>{3 * 4});
         CHECK(S.select(std::make_tuple(0, 2), 0).start     == std::array<int, 1>{0});
         CHECK(S.select(std::make_tuple(0, 2), 0).final     == std::array<int, 1>{2 * 4 + 1});
-        CHECK(S.select(std::make_tuple(0, 2), 0).strides() == std::array<int, 1>{4});
+        CHECK(S.select(std::make_tuple(0, 2), 0).skips     == std::array<int, 1>{4});
         CHECK(S.select(std::make_tuple(0, 2), 0).shape()   == std::array<int, 1>{2});
     }
 
