@@ -916,11 +916,7 @@ public:
         assert_valid_argument(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
 
-        auto a = this->begin();
-        auto b = other.begin();
-
-        for (; a != end(); ++a, ++b)
-            *a = *b;
+        copy_internal(*this, other);
 
         return *this;
     }
@@ -935,14 +931,21 @@ public:
     template<typename... Sizes>
     auto reshape(Sizes... sizes)
     {
+        if (! contiguous())
+        {
+            auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+            copy_internal(A, *this);
+            return A;
+        }
         return ndarray<T, sizeof...(Sizes)>({sizes...}, buf);
     }
 
     template<typename... Sizes>
     auto reshape(Sizes... sizes) const
     {
-        auto A = copy();
-        return ndarray<T, sizeof...(Sizes)>({sizes...}, A.buf);
+        auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+        copy_internal(A, *this);
+        return A;
     }
 
 
@@ -1338,6 +1341,18 @@ private:
             throw std::invalid_argument(message);
     }
 
+    template<typename target_type, int target_rank>
+    static void copy_internal(ndarray<target_type, target_rank>& target, const ndarray<T, R>& source)
+    {
+        if (target.size() != source.size())
+            throw std::invalid_argument("source and target arrays have different sizes");
+
+        auto a = target.begin();
+        auto b = source.begin();
+
+        for (; a != target.end(); ++a, ++b)
+            *a = *b;
+    }
 
 
 
