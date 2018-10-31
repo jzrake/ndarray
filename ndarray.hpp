@@ -984,6 +984,43 @@ TEST_CASE("ndarrays can perform skipped assignments", "[ndarray]")
         REQUIRE((A.select(_|0|9|3) == 1).all());
         REQUIRE((A.select(_|1|9|3) == 2).all());
         REQUIRE((A.select(_|2|9|3) == 3).all());
+        REQUIRE_THROWS_AS(A.select(_|0|9|3)(3), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|1|9|3)(3), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|2|9|3)(3), std::out_of_range);
+    }
+
+    SECTION("skipped assignment on axis 0 to ndarray<2> works as expected on")
+    {
+        auto A = nd::ndarray<int, 2>(9, 7);
+        A.select(_|0|9|3, _|0|7) = 1;
+        A.select(_|1|9|3, _|0|7) = 2;
+        A.select(_|2|9|3, _|0|7) = 3;
+        REQUIRE(A.select(_|0|9|3, _|0|7).size() == 21);
+        REQUIRE(A.select(_|1|9|3, _|0|7).size() == 21);
+        REQUIRE(A.select(_|2|9|3, _|0|7).size() == 21);
+        REQUIRE((A.select(_|0|9|3, _|0|7) == 1).all());
+        REQUIRE((A.select(_|1|9|3, _|0|7) == 2).all());
+        REQUIRE((A.select(_|2|9|3, _|0|7) == 3).all());
+        REQUIRE_THROWS_AS(A.select(_|0|9|3, _|0|7)(3, 0), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|1|9|3, _|0|7)(3, 0), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|2|9|3, _|0|7)(3, 0), std::out_of_range);
+    }
+
+    SECTION("skipped assignment on axis 1 to ndarray<2> works as expected on")
+    {
+        auto A = nd::ndarray<int, 2>(7, 9);
+        A.select(_|0|7, _|0|9|3) = 1;
+        A.select(_|0|7, _|1|9|3) = 2;
+        A.select(_|0|7, _|2|9|3) = 3;
+        REQUIRE(A.select(_|0|7, _|0|9|3).size() == 21);
+        REQUIRE(A.select(_|0|7, _|1|9|3).size() == 21);
+        REQUIRE(A.select(_|0|7, _|2|9|3).size() == 21);
+        REQUIRE((A.select(_|0|7, _|0|9|3) == 1).all());
+        REQUIRE((A.select(_|0|7, _|1|9|3) == 2).all());
+        REQUIRE((A.select(_|0|7, _|2|9|3) == 3).all());
+        REQUIRE_THROWS_AS(A.select(_|0|7, _|0|9|3)(0, 3), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|0|7, _|1|9|3)(0, 3), std::out_of_range);
+        REQUIRE_THROWS_AS(A.select(_|0|7, _|2|9|3)(0, 3), std::out_of_range);
     }
 }
 

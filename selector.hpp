@@ -115,7 +115,7 @@ struct nd::selector
 
         _count[axis] = count[axis + 1] * count[axis];
         _start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
-        _final[axis] = count[axis + 1] * final[axis]; // + final[axis + 1];
+        _final[axis] = count[axis + 1] * final[axis];
         _skips[axis] = 1;
 
         return {_count, _start, _final, _skips};
