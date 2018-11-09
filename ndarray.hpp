@@ -284,6 +284,7 @@ public:
     {
         assert_valid_argument(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
+
         copy_internal(*this, other);
         return *this;
     }
@@ -308,11 +309,18 @@ public:
     }
 
     template<typename... Sizes>
-    auto reshape(Sizes... sizes) const
+    const auto reshape(Sizes... sizes) const
     {
-        auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
-        copy_internal(A, *this);
-        return A;
+        if (! contiguous())
+        {
+            auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+            copy_internal(A, *this);
+            return A;
+        }
+        return ndarray<T, sizeof...(Sizes)>({sizes...}, const_cast<std::shared_ptr<buffer<T>>&>(buf));
+        // auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+        // copy_internal(A, *this);
+        // return A;
     }
 
 
@@ -351,8 +359,10 @@ public:
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
-        return {0, d};
+        return {offset_relative({index}), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
+
+        // auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
+        // return {0, d};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
@@ -370,15 +380,17 @@ public:
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto S = sel.select(index);
-        auto d = std::make_shared<buffer<T>>(S.size());
-        auto a = d->begin();
-        auto b = begin();
+        return {sel.select(index), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
 
-        for ( ; a != d->end(); ++a, ++b)
-            *a = *b;
+        // auto S = sel.select(index);
+        // auto d = std::make_shared<buffer<T>>(S.size());
+        // auto a = d->begin();
+        // auto b = begin();
 
-        return {S, d};
+        // for ( ; a != d->end(); ++a, ++b)
+        //     *a = *b;
+
+        // return {S, d};
     }
 
     template<typename... Index>
@@ -416,14 +428,17 @@ public:
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = sel.select(index...);
-        auto d = std::make_shared<buffer<T>>(S.size());
-        auto a = d->begin();
-        auto b = begin();
+        return ndarray<T, S.rank>(S.reset(), const_cast<std::shared_ptr<buffer<T>>&>(buf));
 
-        for ( ; a != d->end(); ++a, ++b)
-            *a = *b;
+        // auto S = sel.select(index...);
+        // auto d = std::make_shared<buffer<T>>(S.size());
+        // auto a = d->begin();
+        // auto b = begin();
 
-        return ndarray<T, S.rank>(S.reset(), d);
+        // for ( ; a != d->end(); ++a, ++b)
+        //     *a = *b;
+
+        // return ndarray<T, S.rank>(S.reset(), d);
     }
 
     operator T() const
@@ -810,11 +825,17 @@ TEST_CASE("ndarray can be copied and casted", "[ndarray]")
     auto A = nd::arange<double>(10);
     auto B = nd::arange<float>(10);
     auto C = A.astype<float>();
+    auto D = A;
+    const auto E = A;
+    auto F = E;
 
     REQUIRE(B(0) == C(0));
     REQUIRE(B(1) == C(1));
     REQUIRE_FALSE(A.copy().shares(A));
     REQUIRE_FALSE(C.shares(B));
+    REQUIRE(D.shares(A));
+    REQUIRE(E.shares(A));
+    REQUIRE_FALSE(F.shares(A));
 }
 
 
@@ -834,10 +855,12 @@ TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarr
     {
         const auto A = nd::ndarray<int, 3>(10, 12, 14);
         REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
-        REQUIRE_FALSE(A[0].shares(A));
-        REQUIRE_FALSE(A.select(_|0|10, _|0|12, _|0|14).shares(A));
+        REQUIRE(A[0].shares(A));
+        REQUIRE(A.select(_|0|10, _|0|12, _|0|14).shares(A));
 
         // Should fail to compile:
+        // A.select(_|0|10, _|0|12, _|0|14) = 1.0;
+        // A.reshape(120, 14) = 10;
         // A.select(_|0|10, _|0|12, _|0|14) = 1.0;
     }
 
@@ -895,7 +918,7 @@ TEST_CASE("ndarray can return a reshaped version of itself", "[ndarray] [reshape
     REQUIRE(A.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
     REQUIRE(B.reshape(10, 10).shape() == std::array<int, 2>{10, 10});
     REQUIRE(A.reshape(10, 10).shares(A));
-    REQUIRE_FALSE(B.reshape(10, 10).shares(B));
+    REQUIRE(B.reshape(10, 10).shares(B));
     REQUIRE_THROWS_AS(A.reshape(10, 11), std::invalid_argument);
 }
 

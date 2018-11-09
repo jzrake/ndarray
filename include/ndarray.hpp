@@ -923,6 +923,7 @@ public:
     {
         assert_valid_argument(shape() == other.shape(),
             "assignment from ndarray of incompatible shape");
+
         copy_internal(*this, other);
         return *this;
     }
@@ -947,11 +948,18 @@ public:
     }
 
     template<typename... Sizes>
-    auto reshape(Sizes... sizes) const
+    const auto reshape(Sizes... sizes) const
     {
-        auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
-        copy_internal(A, *this);
-        return A;
+        if (! contiguous())
+        {
+            auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+            copy_internal(A, *this);
+            return A;
+        }
+        return ndarray<T, sizeof...(Sizes)>({sizes...}, const_cast<std::shared_ptr<buffer<T>>&>(buf));
+        // auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
+        // copy_internal(A, *this);
+        // return A;
     }
 
 
@@ -990,8 +998,10 @@ public:
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
-        return {0, d};
+        return {offset_relative({index}), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
+
+        // auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
+        // return {0, d};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
@@ -1009,15 +1019,17 @@ public:
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
             throw std::out_of_range("ndarray: index out of range");
 
-        auto S = sel.select(index);
-        auto d = std::make_shared<buffer<T>>(S.size());
-        auto a = d->begin();
-        auto b = begin();
+        return {sel.select(index), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
 
-        for ( ; a != d->end(); ++a, ++b)
-            *a = *b;
+        // auto S = sel.select(index);
+        // auto d = std::make_shared<buffer<T>>(S.size());
+        // auto a = d->begin();
+        // auto b = begin();
 
-        return {S, d};
+        // for ( ; a != d->end(); ++a, ++b)
+        //     *a = *b;
+
+        // return {S, d};
     }
 
     template<typename... Index>
@@ -1055,14 +1067,17 @@ public:
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = sel.select(index...);
-        auto d = std::make_shared<buffer<T>>(S.size());
-        auto a = d->begin();
-        auto b = begin();
+        return ndarray<T, S.rank>(S.reset(), const_cast<std::shared_ptr<buffer<T>>&>(buf));
 
-        for ( ; a != d->end(); ++a, ++b)
-            *a = *b;
+        // auto S = sel.select(index...);
+        // auto d = std::make_shared<buffer<T>>(S.size());
+        // auto a = d->begin();
+        // auto b = begin();
 
-        return ndarray<T, S.rank>(S.reset(), d);
+        // for ( ; a != d->end(); ++a, ++b)
+        //     *a = *b;
+
+        // return ndarray<T, S.rank>(S.reset(), d);
     }
 
     operator T() const

@@ -70,18 +70,21 @@ The code should be transparent enough that you can modify it without much troubl
 
   // If A is non-const, then
   {
-    nd::ndarray<double, 1> A(100); // A[0].shares(A);
+    nd::ndarray<double, 1> A(100); // A[0].shares(A)
     A(0) = 1.0; // OK
     A.select(_|0|5) = 2.0; // OK
-    nd::ndarray<double, 1> B = A; // B.is(A);
+    nd::ndarray<double, 1> B = A; // B.is(A)
   }
 
   // whereas if A is const,
   {
-    const nd::ndarray<double, 1> A(100); // ! A[0].shares(A);
+    const nd::ndarray<double, 1> A(100); // A[0].shares(A), and
+    const nd::ndarray<double, 1> B = A;  // B.shares(A), however
+    nd::ndarray<double, 1> C = A;        // ! C.shares(A),
+    // since otherwise C[0] = 1.0 would modify A's buffer and A is const.
+
     // A(0) = 1.0; // compile error
     // A.select(_|0|5) = 2.0; // compile error
-    ndarray<1> B = A; // ! B.is(A);
   }
 ```
 
