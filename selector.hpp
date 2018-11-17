@@ -333,8 +333,8 @@ struct nd::selector
         bool operator!=(iterator other) const { return ind != other.ind; }
         const std::array<int, rank>& operator*() const { return ind; }
     private:
-        std::array<int, rank> ind;
         selector<rank> sel;
+        std::array<int, rank> ind;
     };
 
     iterator begin() const { return {reset(), start}; }

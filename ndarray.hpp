@@ -229,8 +229,8 @@ public:
 
     ndarray(std::array<int, R> dim_sizes)
     : sel(dim_sizes)
-    , buf(std::make_shared<buffer<T>>(sel.size()))
     , strides(sel.strides())
+    , buf(std::make_shared<buffer<T>>(sel.size()))
     {
     }
 
@@ -576,8 +576,8 @@ public:
         ndarray<T, R>& get_array() const { return array; }
 
     private:
-        typename selector<rank>::iterator it;
         ndarray<T, R>& array;
+        typename selector<rank>::iterator it;
     };
 
     iterator begin() { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.begin()}; }
@@ -604,8 +604,8 @@ public:
         const T& operator*() const { return array.buf->operator[](array.offset_absolute(*it)); }
 
     private:
-        typename selector<rank>::iterator it;
         const ndarray<T, R>& array;
+        typename selector<rank>::iterator it;
     };
 
     const_iterator begin() const { static_assert(R > 0, "cannot iterate over scalar"); return {*this, sel.begin()}; }
@@ -745,8 +745,8 @@ private:
     // ========================================================================
     int scalar_offset = 0;
     selector<R> sel;
-    std::shared_ptr<buffer<T>> buf;
     std::array<int, R> strides;
+    std::shared_ptr<buffer<T>> buf;
 
 
 
