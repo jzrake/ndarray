@@ -14,7 +14,7 @@ include/ndarray.hpp: $(HEADERS)
 test: test.o catch.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
-main: main.o
+main: main.o other.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:

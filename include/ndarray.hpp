@@ -51,17 +51,17 @@ namespace nd
     namespace shape
     {
         template<unsigned long rank>
-        std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
-        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
-        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
-        std::array<std::tuple<int, int>, 1> promote(int index);
-        std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
-        std::array<std::tuple<int, int>, 1> promote(axis::range range);
-        std::array<std::tuple<int, int>, 1> promote(axis::index index);
-        std::array<std::tuple<int, int>, 1> promote(axis::all all);
-        template<typename First> auto make_shape(First first);
-        template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
-        template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
+        static inline std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
+        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
+        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
+        static inline std::array<std::tuple<int, int>, 1> promote(int index);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
+        template<typename First> static auto make_shape(First first);
+        template<typename Shape1, typename Shape2> static auto make_shape(Shape1 shape1, Shape2 shape2);
+        template<typename First, typename... Rest> static auto make_shape(First first, Rest... rest);        
     }
 } 
 
@@ -85,12 +85,12 @@ namespace nd
     template<typename T, int R> class ndarray;
     template<typename T> struct dtype_str;
 
-    template<typename T> ndarray<T, 1> arange(int size);
-    template<typename T> ndarray<T, 1> ones(int size);
-    template<typename T> ndarray<T, 1> zeros(int size);
+    template<typename T> ndarray<T, 1> static inline arange(int size);
+    template<typename T> ndarray<T, 1> static inline ones(int size);
+    template<typename T> ndarray<T, 1> static inline zeros(int size);
 
     template<typename T, int R>
-    nd::ndarray<T, R + 1> stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays);
+    static inline nd::ndarray<T, R + 1> stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays);
 } 
 
 
@@ -794,17 +794,17 @@ struct nd::binary_op
 
 
 // ============================================================================
-template<> struct nd::dtype_str<bool  > { static std::array<char, 8> value; };
-template<> struct nd::dtype_str<float > { static std::array<char, 8> value; };
-template<> struct nd::dtype_str<double> { static std::array<char, 8> value; };
-template<> struct nd::dtype_str<int   > { static std::array<char, 8> value; };
-template<> struct nd::dtype_str<long  > { static std::array<char, 8> value; };
+template<> struct nd::dtype_str<bool  > { static inline std::array<char, 8> value(); };
+template<> struct nd::dtype_str<float > { static inline std::array<char, 8> value(); };
+template<> struct nd::dtype_str<double> { static inline std::array<char, 8> value(); };
+template<> struct nd::dtype_str<int   > { static inline std::array<char, 8> value(); };
+template<> struct nd::dtype_str<long  > { static inline std::array<char, 8> value(); };
 
-std::array<char, 8> nd::dtype_str<bool  >::value = {'b','1',  0,  0,  0,  0,  0,  0};
-std::array<char, 8> nd::dtype_str<float >::value = {'f','4',  0,  0,  0,  0,  0,  0};
-std::array<char, 8> nd::dtype_str<double>::value = {'f','8',  0,  0,  0,  0,  0,  0};
-std::array<char, 8> nd::dtype_str<int   >::value = {'i','4',  0,  0,  0,  0,  0,  0};
-std::array<char, 8> nd::dtype_str<long  >::value = {'i','8',  0,  0,  0,  0,  0,  0};
+std::array<char, 8> nd::dtype_str<bool  >::value() { return {'b','1',  0,  0,  0,  0,  0,  0}; }
+std::array<char, 8> nd::dtype_str<float >::value() { return {'f','4',  0,  0,  0,  0,  0,  0}; }
+std::array<char, 8> nd::dtype_str<double>::value() { return {'f','8',  0,  0,  0,  0,  0,  0}; }
+std::array<char, 8> nd::dtype_str<int   >::value() { return {'i','4',  0,  0,  0,  0,  0,  0}; }
+std::array<char, 8> nd::dtype_str<long  >::value() { return {'i','8',  0,  0,  0,  0,  0,  0}; }
 
 
 
@@ -1265,7 +1265,7 @@ public:
         // shape ... rank int's
         // data  ... size T's
 
-        auto D = dtype_str<T>::value;
+        auto D = dtype_str<T>::value();
         auto Q = int(rank);
         auto S = shape();
         auto str = std::string();
@@ -1301,7 +1301,7 @@ public:
         std::memcpy(&S, &*it, sizeof(S));
         it += sizeof(S);
 
-        assert_valid_argument(D == dtype_str<T>::value, "ndarray string has wrong data type");
+        assert_valid_argument(D == dtype_str<T>::value(), "ndarray string has wrong data type");
         assert_valid_argument(Q == rank, "ndarray string has the wrong rank");
 
         auto size = std::accumulate(S.begin(), S.end(), 1, std::multiplies<>());

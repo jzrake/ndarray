@@ -42,17 +42,17 @@ namespace nd // ND_API_START
     namespace shape
     {
         template<unsigned long rank>
-        std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
-        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
-        std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
-        std::array<std::tuple<int, int>, 1> promote(int index);
-        std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
-        std::array<std::tuple<int, int>, 1> promote(axis::range range);
-        std::array<std::tuple<int, int>, 1> promote(axis::index index);
-        std::array<std::tuple<int, int>, 1> promote(axis::all all);
-        template<typename First> auto make_shape(First first);
-        template<typename Shape1, typename Shape2> auto make_shape(Shape1 shape1, Shape2 shape2);
-        template<typename First, typename... Rest> auto make_shape(First first, Rest... rest);        
+        static inline std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
+        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
+        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
+        static inline std::array<std::tuple<int, int>, 1> promote(int index);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
+        static inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
+        template<typename First> static auto make_shape(First first);
+        template<typename Shape1, typename Shape2> static auto make_shape(Shape1 shape1, Shape2 shape2);
+        template<typename First, typename... Rest> static auto make_shape(First first, Rest... rest);        
     }
 } // ND_API_END
 
