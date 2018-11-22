@@ -15,7 +15,7 @@ The code should be transparent enough that you can modify it without much troubl
 
 # Overview
 
-`ndarray` objects use the same memory model as `np.array` in numpy. The array itself is a lightweight stack object containing a `std::shared_ptr` to a memory block, which may be in use by multiple arrays. Const-correctness is ensured by having slicing operations on const arrays return a deep-copy of the data.
+`ndarray` objects use the same memory model as `np.array` in numpy. The array itself is a lightweight stack object containing a `std::shared_ptr` to a memory block, which may be in use by multiple arrays. Const-correctness is respected: const arrays cannot modify their memory buffers, and non-const arrays are constructed from const arrays by creating a new memory buffer.
 
 
 ```C++
@@ -24,7 +24,7 @@ The code should be transparent enough that you can modify it without much troubl
   nd::ndarray<int, 3> A(100, 200, 10);
   nd::ndarray<int, 2> B = A[0]; // B.shape() == {200, 10}; B.shares(A);
   nd::ndarray<int, 1> C = B[0]; // C.shape() == {10}; C.shares(B);
-  nd::ndarray<0> D = C[0]; // D.shape() == {}; D.shares(C);
+  nd::ndarray<int, 0> D = C[0]; // D.shape() == {}; D.shares(C);
   double d = D; // rank-0 arrays cast to underlying scalar type
   double e = A[0][0][0]; // d == e (slow)
   double f = A(0, 0, 0); // e == f (fast)
