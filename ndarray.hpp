@@ -209,7 +209,7 @@ public:
     }
 
     template<typename... Dims>
-    ndarray(Dims... dims) : ndarray(std::array<int, R>({dims...}))
+    ndarray(Dims... dims) : ndarray(std::array<int, R>({int(dims)...}))
     {
         static_assert(sizeof...(dims) == rank,
           "Number of arguments to ndarray constructor must match rank");
@@ -318,9 +318,6 @@ public:
             return A;
         }
         return ndarray<T, sizeof...(Sizes)>({sizes...}, const_cast<std::shared_ptr<buffer<T>>&>(buf));
-        // auto A = ndarray<T, sizeof...(Sizes)>(sizes...);
-        // copy_internal(A, *this);
-        // return A;
     }
 
 
@@ -360,9 +357,6 @@ public:
             throw std::out_of_range("ndarray: index out of range");
 
         return {offset_relative({index}), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
-
-        // auto d = std::make_shared<buffer<T>>(1, buf->operator[](offset_relative({index})));
-        // return {0, d};
     }
 
     template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
@@ -381,16 +375,6 @@ public:
             throw std::out_of_range("ndarray: index out of range");
 
         return {sel.select(index), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
-
-        // auto S = sel.select(index);
-        // auto d = std::make_shared<buffer<T>>(S.size());
-        // auto a = d->begin();
-        // auto b = begin();
-
-        // for ( ; a != d->end(); ++a, ++b)
-        //     *a = *b;
-
-        // return {S, d};
     }
 
     template<typename... Index>
@@ -429,16 +413,6 @@ public:
 
         auto S = sel.select(index...);
         return ndarray<T, S.rank>(S.reset(), const_cast<std::shared_ptr<buffer<T>>&>(buf));
-
-        // auto S = sel.select(index...);
-        // auto d = std::make_shared<buffer<T>>(S.size());
-        // auto a = d->begin();
-        // auto b = begin();
-
-        // for ( ; a != d->end(); ++a, ++b)
-        //     *a = *b;
-
-        // return ndarray<T, S.rank>(S.reset(), d);
     }
 
     operator T() const
