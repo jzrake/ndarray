@@ -50,9 +50,9 @@ namespace nd // ND_API_START
         static inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
         static inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
         static inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
-        template<typename First> static auto make_shape(First first);
-        template<typename Shape1, typename Shape2> static auto make_shape(Shape1 shape1, Shape2 shape2);
-        template<typename First, typename... Rest> static auto make_shape(First first, Rest... rest);        
+        template<typename First>                   static inline auto make_shape(First first);
+        template<typename First, typename Second>  static inline auto make_shape(First first, Second second);
+        template<typename First, typename... Rest> static inline auto make_shape(First first, Rest... rest);
     }
 } // ND_API_END
 
@@ -107,11 +107,11 @@ auto nd::shape::make_shape(First first)
     return promote(first);
 }
 
-template<typename Shape1, typename Shape2>
-auto nd::shape::make_shape(Shape1 shape1, Shape2 shape2)
+template<typename First, typename Second>
+auto nd::shape::make_shape(First first, Second second)
 {
-    auto s1 = promote(shape1);
-    auto s2 = promote(shape2);
+    auto s1 = promote(first);
+    auto s2 = promote(second);
     auto res = std::array<std::tuple<int, int>, s1.size() + s2.size()>();
 
     for (int n = 0; n < s1.size(); ++n)
@@ -170,18 +170,6 @@ TEST_CASE("make_shape works correctly", "[shape]")
 
     SECTION("3D shapes are constructed")
     {
-        auto t = make_shape(0, _|1|2, 2);
-        auto u = make_shape(_|0|1, 1, 2);
-        auto v = make_shape(0, 1, _|2|3);
-
-        CHECK(t == u);
-        CHECK(u == v);
-        CHECK(t.size() == 3);
-    }
-    
-    SECTION("3D shapes are constructed using the nd::axis syntax")
-    {
-        auto _ = nd::axis::all();
         auto t = make_shape(0, _|1|2, 2);
         auto u = make_shape(_|0|1, 1, 2);
         auto v = make_shape(0, 1, _|2|3);

@@ -9,6 +9,43 @@
 namespace nd 
 {
     template<int Rank, int Axis> struct selector;
+
+    /**
+     * Creates a selector without count (memory extent) information, e.g:
+     *
+     * auto sel = make_selector(_0|100|2, _|50|100);
+     *
+     * This selector can return size, skips, and shape information, but thinks
+     * it has a count of 1 on each axis.
+     */
+    template<typename... Index>
+    static inline auto make_selector(Index... index)
+    {
+        return selector<sizeof...(Index), 0>().select(index...);
+    }
+
+    /**
+     * Returns a selector with a different count, by reading from the given
+     * iterator range. The iterator difference must match the selector rank,
+     * but no checking is performed that the existing selection is within the
+     * new count.
+     */
+    template<typename Selector, typename First, typename Second>
+    static inline auto with_count(Selector sel, First begin, Second end)
+    {
+        auto it = begin;
+        auto n = 0;
+
+        if (end - begin != sel.rank)
+        {
+            throw std::invalid_argument("with_count got wrong number of axes");
+        }
+        while (it != end)
+        {
+            sel.count[n++] = *it++;
+        }
+        return sel;
+    }
 } 
 
 
@@ -59,9 +96,9 @@ namespace nd
         static inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
         static inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
         static inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
-        template<typename First> static auto make_shape(First first);
-        template<typename Shape1, typename Shape2> static auto make_shape(Shape1 shape1, Shape2 shape2);
-        template<typename First, typename... Rest> static auto make_shape(First first, Rest... rest);        
+        template<typename First>                   static inline auto make_shape(First first);
+        template<typename First, typename Second>  static inline auto make_shape(First first, Second second);
+        template<typename First, typename... Rest> static inline auto make_shape(First first, Rest... rest);
     }
 } 
 
@@ -106,7 +143,16 @@ struct nd::selector
 
 
     // ========================================================================
-    selector() {}
+    selector()
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            count[n] = 1;
+            start[n] = 0;
+            final[n] = 1;
+            skips[n] = 1;
+        }
+    }
 
     template<typename... Dims>
     selector(Dims... dims) : selector(std::array<int, rank>{dims...})
@@ -291,11 +337,6 @@ struct nd::selector
         {
             s[n] = s[n + 1] * count[n + 1];
         }
-
-        // for (int n = 0; n < rank; ++n)
-        // {
-        //     s[n] *= skips[n];
-        // }
         return s;
     }
 
@@ -305,7 +346,6 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            // s[n] = (final[n] - start[n]) / skips[n];
             s[n] = final[n] / skips[n] - start[n] / skips[n];
         }
         return s;
@@ -488,11 +528,11 @@ auto nd::shape::make_shape(First first)
     return promote(first);
 }
 
-template<typename Shape1, typename Shape2>
-auto nd::shape::make_shape(Shape1 shape1, Shape2 shape2)
+template<typename First, typename Second>
+auto nd::shape::make_shape(First first, Second second)
 {
-    auto s1 = promote(shape1);
-    auto s2 = promote(shape2);
+    auto s1 = promote(first);
+    auto s2 = promote(second);
     auto res = std::array<std::tuple<int, int>, s1.size() + s2.size()>();
 
     for (int n = 0; n < s1.size(); ++n)
@@ -1078,6 +1118,11 @@ public:
         return buf->data();
     }
 
+    selector<R> get_selector() const
+    {
+        return sel;
+    }
+
 
 
 
@@ -1348,6 +1393,7 @@ private:
         for (; a != target.end(); ++a, ++b)
             *a = *b;
     }
+
 
 
 

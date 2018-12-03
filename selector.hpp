@@ -11,6 +11,43 @@
 namespace nd // ND_API_START
 {
     template<int Rank, int Axis> struct selector;
+
+    /**
+     * Creates a selector without count (memory extent) information, e.g:
+     *
+     * auto sel = make_selector(_0|100|2, _|50|100);
+     *
+     * This selector can return size, skips, and shape information, but thinks
+     * it has a count of 1 on each axis.
+     */
+    template<typename... Index>
+    static inline auto make_selector(Index... index)
+    {
+        return selector<sizeof...(Index), 0>().select(index...);
+    }
+
+    /**
+     * Returns a selector with a different count, by reading from the given
+     * iterator range. The iterator difference must match the selector rank,
+     * but no checking is performed that the existing selection is within the
+     * new count.
+     */
+    template<typename Selector, typename First, typename Second>
+    static inline auto with_count(Selector sel, First begin, Second end)
+    {
+        auto it = begin;
+        auto n = 0;
+
+        if (end - begin != sel.rank)
+        {
+            throw std::invalid_argument("with_count got wrong number of axes");
+        }
+        while (it != end)
+        {
+            sel.count[n++] = *it++;
+        }
+        return sel;
+    }
 } // ND_API_END
 
 
@@ -26,7 +63,16 @@ struct nd::selector
 
 
     // ========================================================================
-    selector() {}
+    selector()
+    {
+        for (int n = 0; n < rank; ++n)
+        {
+            count[n] = 1;
+            start[n] = 0;
+            final[n] = 1;
+            skips[n] = 1;
+        }
+    }
 
     template<typename... Dims>
     selector(Dims... dims) : selector(std::array<int, rank>{dims...})
@@ -211,11 +257,6 @@ struct nd::selector
         {
             s[n] = s[n + 1] * count[n + 1];
         }
-
-        // for (int n = 0; n < rank; ++n)
-        // {
-        //     s[n] *= skips[n];
-        // }
         return s;
     }
 
@@ -225,7 +266,6 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            // s[n] = (final[n] - start[n]) / skips[n];
             s[n] = final[n] / skips[n] - start[n] / skips[n];
         }
         return s;
@@ -373,6 +413,17 @@ TEST_CASE("selector<3> does construct and compare correctly", "[selector]")
     CHECK(S.shape() == std::array<int, 3>{10, 12, 14});
     CHECK(S == S.select(std::make_tuple(0, 10, 1)).on<0>());
     CHECK(S != S.select(std::make_tuple(0, 10, 2)).on<0>());
+}
+
+
+TEST_CASE("make_selector works correctly", "[make_selector]")
+{
+    auto _ = axis::all();
+    CHECK(make_selector(_|0|2).count[0] == 1);
+    CHECK(make_selector(_|0|2).start[0] == 0);
+    CHECK(make_selector(_|0|2).final[0] == 2);
+    CHECK(make_selector(_|0|2).skips[0] == 1);
+    CHECK(make_selector(_|0|5) == make_selector(_|0|5|1));
 }
 
 

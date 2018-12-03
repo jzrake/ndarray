@@ -12,6 +12,10 @@ int main()
 
     nd::ndarray<double, 1> A(10);
 
+    nd::selector<2> sel({10, 10}, {0, 0}, {12, 12}, {2, 2});
+
+    // std::cout << A.reshape(10, 1).select(_, _|0|1|0)(0, 0) << std::endl;
+
     for (int i = 0; i < A.size(); ++i)
     {
         A(i) = i;

@@ -439,6 +439,11 @@ public:
         return buf->data();
     }
 
+    selector<R> get_selector() const
+    {
+        return sel;
+    }
+
 
 
 
@@ -709,6 +714,7 @@ private:
         for (; a != target.end(); ++a, ++b)
             *a = *b;
     }
+
 
 
 
