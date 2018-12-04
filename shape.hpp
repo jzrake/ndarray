@@ -66,10 +66,10 @@ std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<
     return shape;
 }
 
-std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
-{
-	return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
-}
+// std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+// {
+//     return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
+// }
 
 std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)
 {
@@ -142,7 +142,7 @@ TEST_CASE("make_shape works correctly", "[shape]")
 {
     auto _ = nd::axis::all();
 
-	SECTION("1D shapes are constructed")
+    SECTION("1D shapes are constructed")
     {
         auto t = make_shape(0);
         auto u = make_shape(std::make_tuple(0, 10));
@@ -181,8 +181,8 @@ TEST_CASE("make_shape works correctly", "[shape]")
 
     SECTION("4D shapes are constructed")
     {
-    	CHECK(make_shape(10, 10, 10, 10).size() == 4);
-    	CHECK(make_shape(10, 10, 10, _|0|10).size() == 4);
+        CHECK(make_shape(10, 10, 10, 10).size() == 4);
+        CHECK(make_shape(10, 10, 10, _|0|10).size() == 4);
     }
 }
 

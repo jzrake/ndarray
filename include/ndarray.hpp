@@ -292,9 +292,9 @@ struct nd::selector
         return slice(index.lower);
     }
 
-    auto select(axis::all all) const
+    selector<rank, axis + 1> select(axis::all all) const
     {
-        return *this;
+        return {count, start, final, skips};
     }
 
     selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
@@ -496,10 +496,10 @@ std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<
     return shape;
 }
 
-std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
-{
-	return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
-}
+// std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+// {
+//     return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
+// }
 
 std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)
 {

@@ -203,9 +203,9 @@ struct nd::selector
         return slice(index.lower);
     }
 
-    auto select(axis::all all) const
+    selector<rank, axis + 1> select(axis::all all) const
     {
-        return *this;
+        return {count, start, final, skips};
     }
 
     selector<rank, axis + 1> select(std::tuple<int, int, int> selection) const
