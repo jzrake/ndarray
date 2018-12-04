@@ -96,7 +96,7 @@ std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::index index)
     return {std::make_tuple(index.lower, index.lower + 1)};
 }
 
-std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all all)
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all)
 {
     return {std::make_tuple(0, -1)};
 }
@@ -114,10 +114,10 @@ auto nd::shape::make_shape(First first, Second second)
     auto s2 = promote(second);
     auto res = std::array<std::tuple<int, int>, s1.size() + s2.size()>();
 
-    for (int n = 0; n < s1.size(); ++n)
+    for (std::size_t n = 0; n < s1.size(); ++n)
         res[n] = s1[n];
 
-    for (int n = 0; n < s2.size(); ++n)
+    for (std::size_t n = 0; n < s2.size(); ++n)
         res[n + s1.size()] = s2[n];
 
     return res;

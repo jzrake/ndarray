@@ -6,7 +6,7 @@
 #include "selector.hpp"
 #include "buffer.hpp"
 
-
+#include <iostream>
 
 
 // ============================================================================
@@ -326,7 +326,7 @@ public:
     }
 
     template<typename... Sizes>
-    const auto reshape(Sizes... sizes) const
+    const ndarray<T, sizeof...(Sizes)> reshape(Sizes... sizes) const
     {
         if (! contiguous())
         {
@@ -346,9 +346,35 @@ public:
      */
     // ========================================================================
     auto size() const { return sel.size(); }
-    auto shape() const { return sel.shape(); }
     bool empty() const { return sel.empty(); }
+    auto shape() const { return sel.shape(); }
+    auto shape(int axis) const { return sel.shape(axis); }
     bool contiguous() const { return sel.contiguous(); }
+
+
+
+
+    /**
+     * Wrapper class for constant arrays. Can be trivially converted back to
+     * const nd::array&.
+     */
+    // ========================================================================
+    class const_ref
+    {
+    public:
+        const_ref(selector<R> sel, std::shared_ptr<buffer<T>> buf) : A(sel, buf) {}
+        template<typename... Args> auto operator[](Args... args) const { return A.operator[](args...); }
+        template<typename... Args> auto operator()(Args... args) const { return A.operator()(args...); }
+        template<typename... Args> auto shape(const Args&... args) const { return A.shape(args...); }
+        template<typename... Args> auto size(const Args&... args) const { return A.size(args...); }
+        template<typename... Args> auto shares(const Args&... args) const { return A.shares(args...); }
+        template<int Axis, typename... Args> auto take(const Args&... args) const { return A.take<Axis>(args...); }
+        template<int Axis, typename... Args> auto shift(const Args&... args) const { return A.shift<Axis>(args...); }
+        operator const ndarray<T, R>&() const { return A; }
+        bool is_const_ref() const { return true; }
+    private:
+        ndarray<T, R> A;
+    };
 
 
 
@@ -400,7 +426,7 @@ public:
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: index out of range");
 
-        return buf->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({int(index)...}));
     }
 
     template<typename... Index>
@@ -409,7 +435,7 @@ public:
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
-        return buf->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({int(index)...}));
     }
 
     template<typename... Index>
@@ -423,13 +449,41 @@ public:
     }
 
     template<typename... Index>
-    const auto select(Index... index) const
+    auto select(Index... index) const
     {
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = sel.select(index...);
-        return ndarray<T, S.rank>(S.reset(), const_cast<std::shared_ptr<buffer<T>>&>(buf));
+        return const_ref(S.reset(), buf);
+    }
+
+    template<int Axis, typename Slice>
+    auto take(Slice slice)
+    {
+        auto taken_sel = sel.template on<Axis>().select(slice).reset();
+        return ndarray<T, R>(taken_sel, buf);
+    }
+
+    template<int Axis, typename Slice>
+    auto take(Slice slice) const
+    {
+        auto taken_sel = sel.template on<Axis>().select(slice).reset();
+        return const_ref(taken_sel, buf);
+    }
+
+    template<int Axis>
+    auto shift(int distance)
+    {
+        auto shifted_sel = sel.template on<Axis>().shift(distance).reset();
+        return ndarray<T, R>(shifted_sel, buf);
+    }
+
+    template<int Axis>
+    auto shift(int distance) const
+    {
+        auto shifted_sel = sel.template on<Axis>().shift(distance).reset();
+        return const_ref(shifted_sel, buf);
     }
 
     operator T() const
@@ -464,6 +518,11 @@ public:
     selector<R> get_selector() const
     {
         return sel;
+    }
+
+    bool is_const_ref() const
+    {
+        return false;
     }
 
 
@@ -857,7 +916,8 @@ TEST_CASE("ndarray leading axis slicing via operator[] works correctly", "[ndarr
         const auto A = nd::ndarray<int, 3>(10, 12, 14);
         REQUIRE(A[0].shape() == std::array<int, 2>{12, 14});
         REQUIRE(A[0].shares(A));
-        REQUIRE(A.select(_|0|10, _|0|12, _|0|14).shares(A));
+        CHECK(A.select(_|0|10, _|0|12, _|0|14).shares(A));
+        CHECK(A.take<0>(_|0|10).shares(A));
 
         // Should fail to compile:
         // A.select(_|0|10, _|0|12, _|0|14) = 1.0;
@@ -1006,6 +1066,76 @@ TEST_CASE("ndarrays iterators respect const correctness", "[ndarray] [iterator]"
 }
 
 
+TEST_CASE("ndarrays respect const correctness", "[ndarray]")
+{
+    auto _ = axis::all();
+
+
+    // ========================================================================
+    SECTION("Non-const array B constructed from non-const A shares A")
+    {
+        auto A = ndarray<double, 1>(10);
+        auto B = A;
+        CHECK(B.shares(A));
+    }
+    SECTION("Non-const array B selected from non-const A shares A")
+    {
+        auto A = ndarray<double, 1>(10);
+        auto B = A.take<0>(_|0|10);
+        CHECK(B.shares(A));
+    }
+
+
+    // ========================================================================
+    SECTION("Const array B constructed from non-const A shares A")
+    {
+        auto A = ndarray<double, 1>(10);
+        const auto B = A;
+        CHECK(B.shares(A));
+    }
+    SECTION("Const array B selected from non-const A shares A")
+    {
+        auto A = ndarray<double, 1>(10);
+        const auto B = A.take<0>(_|0|10);
+        CHECK(B.shares(A));
+        CHECK_FALSE(B.is_const_ref());
+    }
+
+
+    // ========================================================================
+    SECTION("Non-const array B constructed from const A does not share A")
+    {
+        const auto A = ndarray<double, 1>(10);
+        auto B = A;
+        CHECK_FALSE(B.shares(A));
+        CHECK_FALSE(B.is_const_ref());
+        CHECK(B.size() == A.size());
+    }
+    SECTION("Non-const array B selected from const A does not share A")
+    {
+        const auto A = ndarray<double, 1>(10);
+        auto B = A.take<0>(_|0|10);
+        CHECK(B.shares(A));
+    }
+
+
+    // ========================================================================
+    SECTION("Const array B constructed from const A *DOES NOT* share A (is there a way?)")
+    {
+        const auto A = ndarray<double, 1>(10);
+        const auto B = A;
+        CHECK_FALSE(B.shares(A));
+    }
+    SECTION("Const array B selected from const A shares A")
+    {
+        const auto A = ndarray<double, 1>(10);
+        const auto B = A.take<0>(_|0|10);
+        CHECK(B.shares(A));
+        CHECK(B.shares(A));
+    }
+}
+
+
 TEST_CASE("ndarrays can be compared, evaluating to a boolean array", "[ndarray] [comparison]")
 {
     SECTION("basic comparison of two arrays with different types works")
@@ -1100,5 +1230,16 @@ TEST_CASE("ndarrays can perform skipped assignments", "[ndarray]")
     }
 }
 
+TEST_CASE("ndarray take and shift members work", "[ndarray::shift] [ndarray::take]")
+{
+    auto _ = nd::axis::all();
 
+    REQUIRE(nd::arange<int>(5).shift<0>(2).size() == 3);
+    REQUIRE(nd::arange<int>(5).shift<0>(2)(0) == 2);
+    REQUIRE(nd::arange<int>(5).shift<0>(2)(2) == 4);
+
+    REQUIRE(nd::arange<int>(5).take<0>(_|2|5).size() == 3);
+    REQUIRE(nd::arange<int>(5).take<0>(_|2|5)(0) == 2);
+    REQUIRE(nd::arange<int>(5).take<0>(_|2|5)(2) == 4);
+}
 #endif // TEST_NDARRAY

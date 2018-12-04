@@ -2,6 +2,7 @@
 #include <array>
 #include <numeric>
 #include <string>
+#include <functional>
 
 
 
@@ -292,7 +293,7 @@ struct nd::selector
         return slice(index.lower);
     }
 
-    selector<rank, axis + 1> select(axis::all all) const
+    selector<rank, axis + 1> select(axis::all) const
     {
         return {count, start, final, skips};
     }
@@ -324,6 +325,7 @@ struct nd::selector
     template<int new_axis>
     selector<rank, new_axis> on() const
     {
+        static_assert(new_axis >= 0 && new_axis < rank, "invalid selector axis");
         return {count, start, final, skips};
     }
 
@@ -334,6 +336,7 @@ struct nd::selector
 
     selector<rank, axis - 1> drop() const
     {
+        static_assert(axis > 0, "invalid selector axis");
         return {count, start, final, skips};
     }
 
@@ -355,9 +358,14 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            s[n] = final[n] / skips[n] - start[n] / skips[n];
+            s[n] = shape(n);
         }
         return s;
+    }
+
+    int shape(int axis) const
+    {
+        return final[axis] / skips[axis] - start[axis] / skips[axis];
     }
 
     bool empty() const
@@ -384,7 +392,7 @@ struct nd::selector
         return true;
     }
 
-    int size() const
+    std::size_t size() const
     {
         auto s = shape();
         return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
@@ -446,6 +454,14 @@ struct nd::selector
             }
         }
         return true;
+    }
+
+    selector<rank, axis> shift(int dist) const
+    {
+        auto sel = *this;
+        sel.start[axis] = std::max(sel.start[axis] + dist * skips[axis], 0);
+        sel.final[axis] = std::min(sel.final[axis] + dist * skips[axis], sel.count[axis]);
+        return sel;
     }
 
 
@@ -526,7 +542,7 @@ std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::index index)
     return {std::make_tuple(index.lower, index.lower + 1)};
 }
 
-std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all all)
+std::array<std::tuple<int, int>, 1> nd::shape::promote(axis::all)
 {
     return {std::make_tuple(0, -1)};
 }
@@ -544,10 +560,10 @@ auto nd::shape::make_shape(First first, Second second)
     auto s2 = promote(second);
     auto res = std::array<std::tuple<int, int>, s1.size() + s2.size()>();
 
-    for (int n = 0; n < s1.size(); ++n)
+    for (std::size_t n = 0; n < s1.size(); ++n)
         res[n] = s1[n];
 
-    for (int n = 0; n < s2.size(); ++n)
+    for (std::size_t n = 0; n < s2.size(); ++n)
         res[n + s1.size()] = s2[n];
 
     return res;
@@ -567,7 +583,6 @@ template<typename T>
 class nd::buffer
 {
 public:
-    using size_type = std::size_t;
 
     buffer() {}
 
@@ -592,11 +607,11 @@ public:
         other.count = 0;
     }
 
-    explicit buffer(size_type count, const T& value = T()) : count(count)
+    explicit buffer(std::size_t count, const T& value = T()) : count(count)
     {
         memory = new T[count];
 
-        for (int n = 0; n < count; ++n)
+        for (std::size_t n = 0; n < count; ++n)
         {
             memory[n] = value;
         }
@@ -667,7 +682,7 @@ public:
             return false;
         }
 
-        for (int n = 0; n < size(); ++n)
+        for (std::size_t n = 0; n < size(); ++n)
         {
             if (memory[n] != other.memory[n])            
             {
@@ -682,7 +697,7 @@ public:
         return ! operator==(other);
     }
 
-    size_type size() const
+    std::size_t size() const
     {
         return count;
     }
@@ -697,12 +712,12 @@ public:
         return memory;
     }
 
-    const T& operator[](size_type offset) const
+    const T& operator[](std::size_t offset) const
     {
         return memory[offset];
     }
 
-    T& operator[](size_type offset)
+    T& operator[](std::size_t offset)
     {
         return memory[offset];
     }
@@ -715,7 +730,7 @@ public:
 
 private:
     T* memory = nullptr;
-    size_type count = 0;
+    std::size_t count = 0;
 }; 
 
 
@@ -1011,7 +1026,7 @@ public:
     }
 
     template<typename... Sizes>
-    const auto reshape(Sizes... sizes) const
+    const ndarray<T, sizeof...(Sizes)> reshape(Sizes... sizes) const
     {
         if (! contiguous())
         {
@@ -1031,9 +1046,35 @@ public:
      */
     // ========================================================================
     auto size() const { return sel.size(); }
-    auto shape() const { return sel.shape(); }
     bool empty() const { return sel.empty(); }
+    auto shape() const { return sel.shape(); }
+    auto shape(int axis) const { return sel.shape(axis); }
     bool contiguous() const { return sel.contiguous(); }
+
+
+
+
+    /**
+     * Wrapper class for constant arrays. Can be trivially converted back to
+     * const nd::array&.
+     */
+    // ========================================================================
+    class const_ref
+    {
+    public:
+        const_ref(selector<R> sel, std::shared_ptr<buffer<T>> buf) : A(sel, buf) {}
+        template<typename... Args> auto operator[](Args... args) const { return A.operator[](args...); }
+        template<typename... Args> auto operator()(Args... args) const { return A.operator()(args...); }
+        template<typename... Args> auto shape(const Args&... args) const { return A.shape(args...); }
+        template<typename... Args> auto size(const Args&... args) const { return A.size(args...); }
+        template<typename... Args> auto shares(const Args&... args) const { return A.shares(args...); }
+        template<int Axis, typename... Args> auto take(const Args&... args) const { return A.take<Axis>(args...); }
+        template<int Axis, typename... Args> auto shift(const Args&... args) const { return A.shift<Axis>(args...); }
+        operator const ndarray<T, R>&() const { return A; }
+        bool is_const_ref() const { return true; }
+    private:
+        ndarray<T, R> A;
+    };
 
 
 
@@ -1085,7 +1126,7 @@ public:
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: index out of range");
 
-        return buf->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({int(index)...}));
     }
 
     template<typename... Index>
@@ -1094,7 +1135,7 @@ public:
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
-        return buf->operator[](offset_relative({index...}));
+        return buf->operator[](offset_relative({int(index)...}));
     }
 
     template<typename... Index>
@@ -1108,13 +1149,41 @@ public:
     }
 
     template<typename... Index>
-    const auto select(Index... index) const
+    auto select(Index... index) const
     {
         if (! sel.contains(index...))
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = sel.select(index...);
-        return ndarray<T, S.rank>(S.reset(), const_cast<std::shared_ptr<buffer<T>>&>(buf));
+        return const_ref(S.reset(), buf);
+    }
+
+    template<int Axis, typename Slice>
+    auto take(Slice slice)
+    {
+        auto taken_sel = sel.template on<Axis>().select(slice).reset();
+        return ndarray<T, R>(taken_sel, buf);
+    }
+
+    template<int Axis, typename Slice>
+    auto take(Slice slice) const
+    {
+        auto taken_sel = sel.template on<Axis>().select(slice).reset();
+        return const_ref(taken_sel, buf);
+    }
+
+    template<int Axis>
+    auto shift(int distance)
+    {
+        auto shifted_sel = sel.template on<Axis>().shift(distance).reset();
+        return ndarray<T, R>(shifted_sel, buf);
+    }
+
+    template<int Axis>
+    auto shift(int distance) const
+    {
+        auto shifted_sel = sel.template on<Axis>().shift(distance).reset();
+        return const_ref(shifted_sel, buf);
     }
 
     operator T() const
@@ -1149,6 +1218,11 @@ public:
     selector<R> get_selector() const
     {
         return sel;
+    }
+
+    bool is_const_ref() const
+    {
+        return false;
     }
 
 

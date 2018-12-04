@@ -22,9 +22,9 @@ The code should be transparent enough that you can modify it without much troubl
   // Basic usage:
 
   nd::ndarray<int, 3> A(100, 200, 10);
-  nd::ndarray<int, 2> B = A[0]; // B.shape() == {200, 10}; B.shares(A);
-  nd::ndarray<int, 1> C = B[0]; // C.shape() == {10}; C.shares(B);
-  nd::ndarray<int, 0> D = C[0]; // D.shape() == {}; D.shares(C);
+  nd::ndarray<int, 2> B = A[0]; // B.shape() == {200, 10} and B.shares(A)
+  nd::ndarray<int, 1> C = B[0]; // C.shape() == {10} and C.shares(B)
+  nd::ndarray<int, 0> D = C[0]; // D.shape() == {} and D.shares(C)
   double d = D; // rank-0 arrays cast to underlying scalar type
   double e = A[0][0][0]; // d == e (slow)
   double f = A(0, 0, 0); // e == f (fast)
@@ -44,10 +44,10 @@ The code should be transparent enough that you can modify it without much troubl
   // Multi-dimensional selections
 
   auto A = nd::ndarray<int, 3>(100, 200, 10);
-  auto B = A.select(0, std::make_tuple(100, 150), 0); // A.rank == 1; A.shares(B);
+  auto B = A.select(0, std::make_tuple(100, 150), 0); // A.rank == 1 and A.shares(B)
   
   auto _ = nd::axis::all();
-  auto C = A.select(0, _|100|150, 0); // (B == C).all();
+  auto C = A.select(0, _|100|150, 0); // (B == C).all()
 ```
 
 
@@ -78,10 +78,11 @@ The code should be transparent enough that you can modify it without much troubl
 
   // whereas if A is const,
   {
-    const nd::ndarray<double, 1> A(100); // A[0].shares(A), and
-    const nd::ndarray<double, 1> B = A;  // B.shares(A), however
+    const nd::ndarray<double, 1> A(100); // A[0].shares(A), however
+    const nd::ndarray<double, 1> B = A;  // ! B.shares(A), and
     nd::ndarray<double, 1> C = A;        // ! C.shares(A),
     // since otherwise C[0] = 1.0 would modify A's buffer and A is const.
+    auto D = A[0]; // D.shares(A), however D.is_const_ref(), which has only const methods.
 
     // A(0) = 1.0; // compile error
     // A.select(_|0|5) = 2.0; // compile error

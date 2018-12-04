@@ -16,7 +16,7 @@ int main()
 
     // std::cout << A.reshape(10, 1).select(_, _|0|1|0)(0, 0) << std::endl;
 
-    for (int i = 0; i < A.size(); ++i)
+    for (std::size_t i = 0; i < A.size(); ++i)
     {
         A(i) = i;
     }
@@ -24,7 +24,7 @@ int main()
     auto str = A.dumps();
     auto B = nd::ndarray<double, 1>::loads(str);
 
-    for (int i = 0; i < B.size(); ++i)
+    for (std::size_t i = 0; i < B.size(); ++i)
     {
         std::cout << B(i) << std::endl;
     }

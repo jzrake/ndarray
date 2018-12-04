@@ -17,7 +17,6 @@ template<typename T> // ND_IMPL_START
 class nd::buffer
 {
 public:
-    using size_type = std::size_t;
 
     buffer() {}
 
@@ -42,11 +41,11 @@ public:
         other.count = 0;
     }
 
-    explicit buffer(size_type count, const T& value = T()) : count(count)
+    explicit buffer(std::size_t count, const T& value = T()) : count(count)
     {
         memory = new T[count];
 
-        for (int n = 0; n < count; ++n)
+        for (std::size_t n = 0; n < count; ++n)
         {
             memory[n] = value;
         }
@@ -117,7 +116,7 @@ public:
             return false;
         }
 
-        for (int n = 0; n < size(); ++n)
+        for (std::size_t n = 0; n < size(); ++n)
         {
             if (memory[n] != other.memory[n])            
             {
@@ -132,7 +131,7 @@ public:
         return ! operator==(other);
     }
 
-    size_type size() const
+    std::size_t size() const
     {
         return count;
     }
@@ -147,12 +146,12 @@ public:
         return memory;
     }
 
-    const T& operator[](size_type offset) const
+    const T& operator[](std::size_t offset) const
     {
         return memory[offset];
     }
 
-    T& operator[](size_type offset)
+    T& operator[](std::size_t offset)
     {
         return memory[offset];
     }
@@ -165,7 +164,7 @@ public:
 
 private:
     T* memory = nullptr;
-    size_type count = 0;
+    std::size_t count = 0;
 }; // ND_IMPL_END
 
 

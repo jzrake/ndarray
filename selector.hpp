@@ -203,7 +203,7 @@ struct nd::selector
         return slice(index.lower);
     }
 
-    selector<rank, axis + 1> select(axis::all all) const
+    selector<rank, axis + 1> select(axis::all) const
     {
         return {count, start, final, skips};
     }
@@ -235,6 +235,7 @@ struct nd::selector
     template<int new_axis>
     selector<rank, new_axis> on() const
     {
+        static_assert(new_axis >= 0 && new_axis < rank, "invalid selector axis");
         return {count, start, final, skips};
     }
 
@@ -245,6 +246,7 @@ struct nd::selector
 
     selector<rank, axis - 1> drop() const
     {
+        static_assert(axis > 0, "invalid selector axis");
         return {count, start, final, skips};
     }
 
@@ -266,9 +268,14 @@ struct nd::selector
 
         for (int n = 0; n < rank; ++n)
         {
-            s[n] = final[n] / skips[n] - start[n] / skips[n];
+            s[n] = shape(n);
         }
         return s;
+    }
+
+    int shape(int axis) const
+    {
+        return final[axis] / skips[axis] - start[axis] / skips[axis];
     }
 
     bool empty() const
@@ -295,7 +302,7 @@ struct nd::selector
         return true;
     }
 
-    int size() const
+    std::size_t size() const
     {
         auto s = shape();
         return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
@@ -357,6 +364,14 @@ struct nd::selector
             }
         }
         return true;
+    }
+
+    selector<rank, axis> shift(int dist) const
+    {
+        auto sel = *this;
+        sel.start[axis] = std::max(sel.start[axis] + dist * skips[axis], 0);
+        sel.final[axis] = std::min(sel.final[axis] + dist * skips[axis], sel.count[axis]);
+        return sel;
     }
 
 
@@ -558,5 +573,17 @@ TEST_CASE("selector<2> subset iterator passes sanity checks", "[selector::iterat
     }
 }
 
+
+TEST_CASE("selector can be shifed", "[selector::shift]")
+{
+    CHECK(selector<2>(10, 5).on<0>().shift(+2).shape()[0] ==  8);
+    CHECK(selector<2>(10, 5).on<0>().shift(+2).shape()[1] ==  5);
+    CHECK(selector<2>(10, 5).on<0>().shift(-1).shape()[0] ==  9);
+    CHECK(selector<2>(10, 5).on<0>().shift(-1).shape()[1] ==  5);
+    CHECK(selector<2>(10, 5).on<1>().shift(-2).shape()[0] == 10);
+    CHECK(selector<2>(10, 5).on<1>().shift(-2).shape()[1] ==  3);
+    CHECK(selector<2>(10, 5).on<1>().shift(+1).shape()[0] == 10);
+    CHECK(selector<2>(10, 5).on<1>().shift(+1).shape()[1] ==  4);
+}
 
 #endif // TEST_SELECTOR
