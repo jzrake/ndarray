@@ -1,5 +1,4 @@
-CXXFLAGS = -std=c++14
-
+CXXFLAGS = -std=c++14 -Wall
 HEADERS = selector.hpp shape.hpp buffer.hpp ndarray.hpp
 
 default: test main

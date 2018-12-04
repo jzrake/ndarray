@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <numeric>
+#include <string>
 
 
 
@@ -117,8 +118,8 @@ namespace nd
 // ============================================================================
 namespace nd 
 {
-    template<typename T, typename U, int R, typename Op> class binary_op;
-    template<typename T, int R, typename Op> class unary_op;
+    template<typename T, typename U, int R, typename Op> struct binary_op;
+    template<typename T, int R, typename Op> struct unary_op;
     template<typename T, int R> class ndarray;
     template<typename T> struct dtype_str;
 
@@ -128,6 +129,14 @@ namespace nd
 
     template<typename T, int R>
     static inline nd::ndarray<T, R + 1> stack(std::initializer_list<nd::ndarray<T, R - 1>> arrays);
+
+/**
+ * Unless you define the following macro, an alias nd::array will be created
+ * for you, to make your declarations a little cleaner.
+ */
+#ifndef ND_DONT_ALIAS_TO_ARRAY
+    template<typename T, int R> using array = ndarray<T, R>;
+#endif
 } 
 
 
@@ -474,7 +483,7 @@ struct nd::selector
 
     // ========================================================================
     template<int other_rank, int other_axis>
-    friend class selector;
+    friend struct selector;
 }; 
 
 
@@ -887,8 +896,8 @@ public:
     template<int Rank = R, typename = typename std::enable_if<Rank == 1>::type>
     ndarray(std::initializer_list<T> elements)
     : sel({elements.size()})
-    , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
     , strides(sel.strides())
+    , buf(std::make_shared<buffer<T>>(elements.begin(), elements.end()))
     {
     }
 
@@ -902,8 +911,8 @@ public:
     template<typename SelectorType>
     ndarray(SelectorType sel, std::shared_ptr<buffer<T>>& buf)
     : sel(sel)
-    , buf(buf)
     , strides(sel.strides())
+    , buf(buf)
     {
     }
 
@@ -920,8 +929,8 @@ public:
 
     ndarray(std::array<int, R> dim_sizes, std::shared_ptr<buffer<T>>& buf)
     : sel(dim_sizes)
-    , buf(buf)
     , strides(sel.strides())
+    , buf(buf)
     {
         assert_valid_argument(buf->size() == sel.size(),
             "Size of data buffer is not the product of dim sizes");
@@ -970,6 +979,15 @@ public:
             "assignment from ndarray of incompatible shape");
 
         copy_internal(*this, other);
+        return *this;
+    }
+
+    ndarray<T, R>& operator=(ndarray<T, R>&& other)
+    {
+        sel = other.sel;
+        buf = other.buf;
+        other.sel = selector<rank>(constant_array<rank>(0));
+        other.buf = std::make_shared<buffer<T>>(sel.size());
         return *this;
     }
 
@@ -1316,7 +1334,6 @@ public:
         auto D = std::array<char, 8>();
         auto Q = int();
         auto S = constant_array<rank>(0);
-        auto x = T();
 
         assert_valid_argument(it + sizeof(D) <= str.end(), "unexpected end of ndarray header string");
         std::memcpy(&D, &*it, sizeof(D));

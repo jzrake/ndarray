@@ -4,6 +4,7 @@ cat << EOF
 #pragma once
 #include <array>
 #include <numeric>
+#include <string>
 EOF
 
 

@@ -394,7 +394,7 @@ struct nd::selector
 
     // ========================================================================
     template<int other_rank, int other_axis>
-    friend class selector;
+    friend struct selector;
 }; // ND_IMPL_END
 
 

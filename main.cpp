@@ -8,7 +8,7 @@
 int main()
 {
     auto _ = nd::axis::all();
-    auto S = nd::selector<2>(3, 4);
+    // auto S = nd::selector<2>(3, 4);
 
     nd::ndarray<double, 1> A(10);
 
