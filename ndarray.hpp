@@ -439,6 +439,11 @@ public:
         return buf->data();
     }
 
+    T* data()
+    {
+        return buf->data();
+    }
+
     selector<R> get_selector() const
     {
         return sel;

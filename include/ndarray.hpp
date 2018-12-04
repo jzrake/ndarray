@@ -683,6 +683,11 @@ public:
         return memory;
     }
 
+    T* data()
+    {
+        return memory;
+    }
+
     const T& operator[](size_type offset) const
     {
         return memory[offset];
@@ -1114,6 +1119,11 @@ public:
     }
 
     const T* data() const
+    {
+        return buf->data();
+    }
+
+    T* data()
     {
         return buf->data();
     }

@@ -142,6 +142,11 @@ public:
         return memory;
     }
 
+    T* data()
+    {
+        return memory;
+    }
+
     const T& operator[](size_type offset) const
     {
         return memory[offset];
