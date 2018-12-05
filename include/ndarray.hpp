@@ -125,6 +125,7 @@ namespace nd
     template<typename T> struct dtype_str;
 
     template<typename T> ndarray<T, 1> static inline arange(int size);
+    template<typename T> ndarray<T, 1> static inline linspace(T start, T end, int size);
     template<typename T> ndarray<T, 1> static inline ones(int size);
     template<typename T> ndarray<T, 1> static inline zeros(int size);
 
@@ -217,7 +218,7 @@ struct nd::selector
 
         _count[axis - 1] = count[axis] * count[axis - 1];
         _start[axis - 1] = count[axis] * start[axis - 1] + start[axis];
-        _final[axis - 1] = count[axis] * final[axis - 1] + final[axis];
+        _final[axis - 1] = count[axis] * final[axis - 1] + start[axis];
         _skips[axis - 1] = count[axis];
 
         return {_count, _start, _final, _skips};
@@ -251,7 +252,7 @@ struct nd::selector
 
         _count[axis] = count[axis + 1] * count[axis];
         _start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
-        _final[axis] = count[axis + 1] * final[axis];
+        _final[axis] = count[axis + 1] * final[axis] + start[axis + 1];
         _skips[axis] = 1;
 
         return {_count, _start, _final, _skips};
@@ -745,6 +746,15 @@ template<typename T> nd::ndarray<T, 1> nd::arange(int size)
     return A;
 }
 
+template<typename T> nd::ndarray<T, 1> nd::linspace(T start, T end, int size)
+{
+    auto A = nd::ndarray<T, 1>(size);
+    auto h = (end - start) / (size - 1);
+    auto x = start - h;
+    for (auto& a : A) a = (x += h);
+    return A;
+}
+
 template<typename T> nd::ndarray<T, 1> nd::ones(int size)
 {
     auto A = nd::ndarray<T, 1>(size);
@@ -1070,8 +1080,13 @@ public:
         template<typename... Args> auto shares(const Args&... args) const { return A.shares(args...); }
         template<int Axis, typename... Args> auto take(const Args&... args) const { return A.take<Axis>(args...); }
         template<int Axis, typename... Args> auto shift(const Args&... args) const { return A.shift<Axis>(args...); }
+
         operator const ndarray<T, R>&() const { return A; }
         bool is_const_ref() const { return true; }
+
+        auto begin() const { return A.begin(); }
+        auto end() const { return A.end(); }
+
     private:
         ndarray<T, R> A;
     };
@@ -1351,7 +1366,7 @@ public:
     {
     public:
         using difference_type = std::ptrdiff_t;
-        using value_type = const T;
+        using value_type = T;
         using pointer = const T*;
         using reference = const T&;
         using iterator_category = std::forward_iterator_tag;
