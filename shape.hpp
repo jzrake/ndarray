@@ -35,7 +35,7 @@ namespace nd // ND_API_START
 
         struct all
         {
-            index operator|(int lower) { return index(lower); }
+            index operator|(int lower) const { return index(lower); }
         };
     }
 

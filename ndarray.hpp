@@ -271,7 +271,9 @@ public:
 
     ndarray(ndarray<T, R>& other)
     {
-        become(other);
+        strides = other.strides;
+        sel = other.sel;
+        buf = other.buf;
     }
 
 
@@ -313,7 +315,7 @@ public:
     //     return *this;
     // }
 
-    void become(ndarray<T, R>& other)
+    void become(ndarray<T, R> other)
     {
         strides = other.strides;
         sel = other.sel;
