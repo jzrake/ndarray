@@ -381,6 +381,7 @@ struct nd::selector
     class iterator
     {
     public:
+        iterator() {}
         iterator(selector<rank> sel, std::array<int, rank> ind) : sel(sel), ind(ind) {}
         iterator& operator++() { sel.next(ind); return *this; }
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }

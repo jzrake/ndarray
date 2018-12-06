@@ -646,18 +646,29 @@ public:
         using reference = T&;
         using iterator_category = std::forward_iterator_tag;
 
-        iterator(ndarray<T, R>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        iterator() {}
+        iterator(ndarray<T, R>& array, typename selector<rank>::iterator it)
+        : mem(array.buf->data())
+        , strides(array.strides)
+        , it(it)
+        {
+        }
+
         iterator& operator++() { it.operator++(); return *this; }
         iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
-        bool operator==(iterator other) const { return array.is(other.array) && it == other.it; }
-        bool operator!=(iterator other) const { return array.is(other.array) && it != other.it; }
-        T& operator*() { return array.buf->operator[](array.offset_absolute(*it)); }
-
-        auto index() const { return *it; }
-        ndarray<T, R>& get_array() const { return array; }
+        bool operator==(iterator other) const { return mem == other.mem && it == other.it; }
+        bool operator!=(iterator other) const { return mem != other.mem || it != other.it; }
+        T& operator*() { return mem[offset_absolute(*it)]; }
 
     private:
-        ndarray<T, R>& array;
+        int offset_absolute(std::array<int, R> index) const
+        {
+            int m = 0;
+            for (int n = 0; n < rank; ++n) m += index[n] * strides[n];
+            return m;
+        }
+        T* mem = nullptr;
+        std::array<int, R> strides = ndarray::constant_array<R>(0);
         typename selector<rank>::iterator it;
     };
 
@@ -677,15 +688,29 @@ public:
         using reference = const T&;
         using iterator_category = std::forward_iterator_tag;
 
-        const_iterator(const ndarray<T, R>& array, typename selector<rank>::iterator it) : array(array), it(it) {}
+        const_iterator() {}
+        const_iterator(const ndarray<T, R>& array, typename selector<rank>::iterator it)
+        : mem(array.buf->data())
+        , strides(array.strides)
+        , it(it)
+        {
+        }
+
         const_iterator& operator++() { it.operator++(); return *this; }
         const_iterator operator++(int) { auto ret = *this; this->operator++(); return ret; }
-        bool operator==(const_iterator other) const { return array.is(other.array) && it == other.it; }
-        bool operator!=(const_iterator other) const { return array.is(other.array) && it != other.it; }
-        const T& operator*() const { return array.buf->operator[](array.offset_absolute(*it)); }
+        bool operator==(const_iterator other) const { return mem == other.mem && it == other.it; }
+        bool operator!=(const_iterator other) const { return mem != other.mem || it != other.it; }
+        const T& operator*() { return mem[offset_absolute(*it)]; }
 
     private:
-        const ndarray<T, R>& array;
+        int offset_absolute(std::array<int, R> index) const
+        {
+            int m = 0;
+            for (int n = 0; n < rank; ++n) m += index[n] * strides[n];
+            return m;
+        }
+        const T* mem = nullptr;
+        std::array<int, R> strides = ndarray::constant_array<R>(0);
         typename selector<rank>::iterator it;
     };
 
