@@ -1000,21 +1000,18 @@ public:
 
     ndarray<T, R>& operator=(const ndarray<T, R>& other)
     {
-        assert_valid_argument(shape() == other.shape(),
-            "assignment from ndarray of incompatible shape");
-
         copy_internal(*this, other);
         return *this;
     }
 
-    ndarray<T, R>& operator=(ndarray<T, R>&& other)
-    {
-        sel = other.sel;
-        buf = other.buf;
-        other.sel = selector<rank>(constant_array<rank>(0));
-        other.buf = std::make_shared<buffer<T>>(sel.size());
-        return *this;
-    }
+    // ndarray<T, R>& operator=(ndarray<T, R>&& other)
+    // {
+    //     sel = other.sel;
+    //     buf = other.buf;
+    //     other.sel = selector<rank>(constant_array<rank>(0));
+    //     other.buf = std::make_shared<buffer<T>>(sel.size());
+    //     return *this;
+    // }
 
     void become(ndarray<T, R>& other)
     {
