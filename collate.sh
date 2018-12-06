@@ -5,6 +5,8 @@ cat << EOF
 #include <array>
 #include <numeric>
 #include <string>
+#include <memory>
+#include <cstring>
 #include <functional>
 EOF
 

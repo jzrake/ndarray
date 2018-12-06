@@ -2,6 +2,8 @@
 #include <array>
 #include <numeric>
 #include <string>
+#include <memory>
+#include <cstring>
 #include <functional>
 
 
@@ -873,17 +875,23 @@ struct nd::binary_op
 
 
 // ============================================================================
-template<> struct nd::dtype_str<bool  > { static inline std::array<char, 8> value(); };
-template<> struct nd::dtype_str<float > { static inline std::array<char, 8> value(); };
-template<> struct nd::dtype_str<double> { static inline std::array<char, 8> value(); };
-template<> struct nd::dtype_str<int   > { static inline std::array<char, 8> value(); };
-template<> struct nd::dtype_str<long  > { static inline std::array<char, 8> value(); };
+/**
+ * This block can be expanded to accommodate new data types. Note: gcc requires
+ * these template specializations to be declared directly inside the namespace.
+ */
+namespace nd {
+  template<> struct dtype_str<bool  > { static inline std::array<char, 8> value(); };
+  template<> struct dtype_str<float > { static inline std::array<char, 8> value(); };
+  template<> struct dtype_str<double> { static inline std::array<char, 8> value(); };
+  template<> struct dtype_str<int   > { static inline std::array<char, 8> value(); };
+  template<> struct dtype_str<long  > { static inline std::array<char, 8> value(); };
 
-std::array<char, 8> nd::dtype_str<bool  >::value() { return {'b','1',  0,  0,  0,  0,  0,  0}; }
-std::array<char, 8> nd::dtype_str<float >::value() { return {'f','4',  0,  0,  0,  0,  0,  0}; }
-std::array<char, 8> nd::dtype_str<double>::value() { return {'f','8',  0,  0,  0,  0,  0,  0}; }
-std::array<char, 8> nd::dtype_str<int   >::value() { return {'i','4',  0,  0,  0,  0,  0,  0}; }
-std::array<char, 8> nd::dtype_str<long  >::value() { return {'i','8',  0,  0,  0,  0,  0,  0}; }
+  std::array<char, 8> dtype_str<bool  >::value() { return {'b','1',  0,  0,  0,  0,  0,  0}; }
+  std::array<char, 8> dtype_str<float >::value() { return {'f','4',  0,  0,  0,  0,  0,  0}; }
+  std::array<char, 8> dtype_str<double>::value() { return {'f','8',  0,  0,  0,  0,  0,  0}; }
+  std::array<char, 8> dtype_str<int   >::value() { return {'i','4',  0,  0,  0,  0,  0,  0}; }
+  std::array<char, 8> dtype_str<long  >::value() { return {'i','8',  0,  0,  0,  0,  0,  0}; }
+}
 
 
 
