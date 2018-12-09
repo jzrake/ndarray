@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++14 -O3 -Wextra -Wno-missing-braces
+CXXFLAGS = -std=c++14 -O0 -Wextra -Wno-missing-braces
 HEADERS = selector.hpp shape.hpp buffer.hpp ndarray.hpp
 
 default: test main

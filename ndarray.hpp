@@ -206,6 +206,43 @@ public:
     enum { rank = R };
 
 
+
+
+    /**
+     * Wrapper class for constant arrays. Can be trivially converted back to
+     * const nd::array&.
+     */
+    // ========================================================================
+    class const_ref
+    {
+    public:
+
+        using dtype = T;
+        enum { rank = R };
+
+        const_ref(selector<R> sel, std::shared_ptr<buffer<T>> buf) : A(sel, buf) {}
+        template<typename... Args> auto operator[](Args... args) const { return A.operator[](args...); }
+        template<typename... Args> auto operator()(Args... args) const { return A.operator()(args...); }
+        template<typename... Args> auto shape(const Args&... args) const { return A.shape(args...); }
+        template<typename... Args> auto size(const Args&... args) const { return A.size(args...); }
+        template<typename... Args> auto shares(const Args&... args) const { return A.shares(args...); }
+        template<int Axis, typename... Args> auto take(const Args&... args) const { return A.take<Axis>(args...); }
+        template<int Axis, typename... Args> auto shift(const Args&... args) const { return A.shift<Axis>(args...); }
+
+        operator const ndarray<T, R>&() const { return A; }
+        bool is_const_ref() const { return true; }
+
+        auto begin() const { return A.begin(); }
+        auto end() const { return A.end(); }
+
+    private:
+        friend class ndarray;
+        ndarray<T, R> A;
+    };
+
+
+
+
     /**
      * Constructors
      * 
@@ -273,7 +310,7 @@ public:
     , strides(sel.strides())
     , buf(std::make_shared<buffer<T>>(size()))
     {
-        *this = other;
+        copy_internal(*this, other);
     }
 
     ndarray(ndarray<T, R>& other)
@@ -312,15 +349,6 @@ public:
         copy_internal(*this, other);
         return *this;
     }
-
-    // ndarray<T, R>& operator=(ndarray<T, R>&& other)
-    // {
-    //     sel = other.sel;
-    //     buf = other.buf;
-    //     other.sel = selector<rank>(constant_array<rank>(0));
-    //     other.buf = std::make_shared<buffer<T>>(sel.size());
-    //     return *this;
-    // }
 
     void become(ndarray<T, R> other)
     {
@@ -366,40 +394,6 @@ public:
     auto shape() const { return sel.shape(); }
     auto shape(int axis) const { return sel.shape(axis); }
     bool contiguous() const { return sel.contiguous(); }
-
-
-
-
-    /**
-     * Wrapper class for constant arrays. Can be trivially converted back to
-     * const nd::array&.
-     */
-    // ========================================================================
-    class const_ref
-    {
-    public:
-
-        using dtype = T;
-        enum { rank = R };
-
-        const_ref(selector<R> sel, std::shared_ptr<buffer<T>> buf) : A(sel, buf) {}
-        template<typename... Args> auto operator[](Args... args) const { return A.operator[](args...); }
-        template<typename... Args> auto operator()(Args... args) const { return A.operator()(args...); }
-        template<typename... Args> auto shape(const Args&... args) const { return A.shape(args...); }
-        template<typename... Args> auto size(const Args&... args) const { return A.size(args...); }
-        template<typename... Args> auto shares(const Args&... args) const { return A.shares(args...); }
-        template<int Axis, typename... Args> auto take(const Args&... args) const { return A.take<Axis>(args...); }
-        template<int Axis, typename... Args> auto shift(const Args&... args) const { return A.shift<Axis>(args...); }
-
-        operator const ndarray<T, R>&() const { return A; }
-        bool is_const_ref() const { return true; }
-
-        auto begin() const { return A.begin(); }
-        auto end() const { return A.end(); }
-
-    private:
-        ndarray<T, R> A;
-    };
 
 
 
@@ -480,7 +474,7 @@ public:
             throw std::out_of_range("ndarray: selection out of range");
 
         auto S = sel.select(index...);
-        return const_ref(S.reset(), buf);
+        return typename ndarray<T, S.rank>::const_ref(S.reset(), buf);
     }
 
     template<int Axis, typename Slice>
@@ -493,8 +487,8 @@ public:
     template<int Axis, typename Slice>
     auto take(Slice slice) const
     {
-        auto taken_sel = sel.template on<Axis>().select(slice).reset();
-        return const_ref(taken_sel, buf);
+        auto S = sel.template on<Axis>().select(slice).reset();
+        return typename ndarray<T, S.rank>::const_ref(S.reset(), buf);
     }
 
     template<int Axis>
@@ -507,8 +501,8 @@ public:
     template<int Axis>
     auto shift(int distance) const
     {
-        auto shifted_sel = sel.template on<Axis>().shift(distance).reset();
-        return const_ref(shifted_sel, buf);
+        auto S = sel.template on<Axis>().shift(distance).reset();
+        return typename ndarray<T, S.rank>::const_ref(S.reset(), buf);
     }
 
     operator T() const
@@ -834,8 +828,8 @@ private:
         }
     }
 
-    template<typename target_type, int target_rank>
-    static void copy_internal(ndarray<target_type, target_rank>& target, const ndarray<T, R>& source)
+    template<typename TT, int TR>
+    static void copy_internal(ndarray<TT, TR>& target, const ndarray<T, R>& source)
     {
         if (target.size() != source.size())
         {
@@ -854,6 +848,24 @@ private:
         }
     }
 
+    static void copy_internal(ndarray<T, R>& target, const ndarray<T, R>& source)
+    {
+        if (target.shape() != source.shape())
+        {
+            throw std::invalid_argument("incompatible assignment from "
+                + shape::to_string(source.shape())
+                + " to "
+                + shape::to_string(target.shape()));
+        }
+
+        auto a = target.begin();
+        auto b = source.begin();
+
+        for (; a != target.end(); ++a, ++b)
+        {
+            *a = *b;
+        }
+    }
 
 
 
