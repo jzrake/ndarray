@@ -1,6 +1,7 @@
 #pragma once
 #include <tuple>
 #include <array>
+#include <string>
 
 
 
@@ -53,6 +54,23 @@ namespace nd // ND_API_START
         template<typename First>                   static inline auto make_shape(First first);
         template<typename First, typename Second>  static inline auto make_shape(First first, Second second);
         template<typename First, typename... Rest> static inline auto make_shape(First first, Rest... rest);
+
+
+        /**
+         * Helper function to convert shapes to string. Very handy in error
+         * reporting.
+         */
+        template<typename T, std::size_t Size>
+        std::string static inline to_string(std::array<T, Size> a)
+        {
+            auto res = std::string("[");
+
+            for (std::size_t n = 0; n < Size; ++n)
+            {
+                res += std::to_string(a[n]) + (n == Size - 1 ? "" : " ");
+            }
+            return res + "]";
+        }
     }
 } // ND_API_END
 

@@ -103,6 +103,23 @@ namespace nd
         template<typename First>                   static inline auto make_shape(First first);
         template<typename First, typename Second>  static inline auto make_shape(First first, Second second);
         template<typename First, typename... Rest> static inline auto make_shape(First first, Rest... rest);
+
+
+        /**
+         * Helper function to convert shapes to string. Very handy in error
+         * reporting.
+         */
+        template<typename T, std::size_t Size>
+        std::string static inline to_string(std::array<T, Size> a)
+        {
+            auto res = std::string("[");
+
+            for (std::size_t n = 0; n < Size; ++n)
+            {
+                res += std::to_string(a[n]) + (n == Size - 1 ? "" : " ");
+            }
+            return res + "]";
+        }
     }
 } 
 
@@ -1080,6 +1097,10 @@ public:
     class const_ref
     {
     public:
+
+        using dtype = T;
+        enum { rank = R };
+
         const_ref(selector<R> sel, std::shared_ptr<buffer<T>> buf) : A(sel, buf) {}
         template<typename... Args> auto operator[](Args... args) const { return A.operator[](args...); }
         template<typename... Args> auto operator()(Args... args) const { return A.operator()(args...); }
@@ -1527,20 +1548,29 @@ private:
     static void assert_valid_argument(bool condition, const char* message)
     {
         if (! condition)
+        {
             throw std::invalid_argument(message);
+        }
     }
 
     template<typename target_type, int target_rank>
     static void copy_internal(ndarray<target_type, target_rank>& target, const ndarray<T, R>& source)
     {
         if (target.size() != source.size())
-            throw std::invalid_argument("source and target arrays have different sizes");
+        {
+            throw std::invalid_argument("incompatible assignment from "
+                + shape::to_string(source.shape())
+                + " to "
+                + shape::to_string(target.shape()));
+        }
 
         auto a = target.begin();
         auto b = source.begin();
 
         for (; a != target.end(); ++a, ++b)
+        {
             *a = *b;
+        }
     }
 
 
