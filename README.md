@@ -18,7 +18,7 @@ The code should be transparent enough that you can modify it without much troubl
 `ndarray` objects use the same memory model as `np.array` in numpy. The array itself is a lightweight stack object containing a `std::shared_ptr` to a memory block, which may be in use by multiple arrays. Const-correctness is respected: const arrays cannot modify their memory buffers, and non-const arrays are constructed from const arrays by creating a new memory buffer.
 
 
-```C++
+```c++
   // Basic usage:
 
   nd::ndarray<int, 3> A(100, 200, 10);
@@ -31,7 +31,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
-```C++
+```c++
   // Creating a 1D array from an initializer list
 
   auto A = nd::ndarray<double, 1>{0, 1, 2, 3};
@@ -40,7 +40,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
-```C++
+```c++
   // Multi-dimensional selections
 
   auto A = nd::ndarray<int, 3>(100, 200, 10);
@@ -51,7 +51,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
-```C++
+```c++
   // STL-compatible iteration
 
   auto x = 0.0;
@@ -65,7 +65,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
-```C++
+```c++
   // Respects const-correctness
 
   // If A is non-const, then
@@ -90,7 +90,7 @@ The code should be transparent enough that you can modify it without much troubl
 ```
 
 
-```C++
+```c++
   // Basic arithmetic and comparison expressions
 
   auto A = nd::arange<int>(10);
