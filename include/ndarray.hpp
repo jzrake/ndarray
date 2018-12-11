@@ -1224,9 +1224,9 @@ public:
         return typename ndarray<T, S.rank>::const_ref(S.reset(), buf);
     }
 
+    template <int Rank = R, typename std::enable_if_t<Rank == 0>* = nullptr>
     operator T() const
     {
-        static_assert(rank == 0, "can only convert rank-0 array to scalar value");
         return buf->operator[](scalar_offset);
     }
 
