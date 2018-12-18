@@ -43,17 +43,17 @@ namespace nd // ND_API_START
     namespace shape
     {
         template<unsigned long rank>
-        static inline std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
-        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
-        static inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
-        static inline std::array<std::tuple<int, int>, 1> promote(int index);
-        static inline std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
-        static inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
-        static inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
-        static inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
-        template<typename First>                   static inline auto make_shape(First first);
-        template<typename First, typename Second>  static inline auto make_shape(First first, Second second);
-        template<typename First, typename... Rest> static inline auto make_shape(First first, Rest... rest);
+        inline std::array<std::tuple<int, int>, rank> promote(std::array<std::tuple<int, int>, rank> shape);
+        inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int, int> selection);
+        inline std::array<std::tuple<int, int>, 1> promote(std::tuple<int, int> range);
+        inline std::array<std::tuple<int, int>, 1> promote(int index);
+        inline std::array<std::tuple<int, int>, 1> promote(axis::selection selection);
+        inline std::array<std::tuple<int, int>, 1> promote(axis::range range);
+        inline std::array<std::tuple<int, int>, 1> promote(axis::index index);
+        inline std::array<std::tuple<int, int>, 1> promote(axis::all all);
+        template<typename First>                   inline auto make_shape(First first);
+        template<typename First, typename Second>  inline auto make_shape(First first, Second second);
+        template<typename First, typename... Rest> inline auto make_shape(First first, Rest... rest);
 
 
         /**
