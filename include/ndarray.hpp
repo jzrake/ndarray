@@ -217,7 +217,7 @@ struct nd::selector
 
 
     // ========================================================================
-    template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
+  template <int R = rank, int A = axis, typename std::enable_if<A == rank - 1>::type* = nullptr>
     selector<rank - 1, axis - 1> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
@@ -243,7 +243,7 @@ struct nd::selector
         return {_count, _start, _final, _skips};
     }
 
-    template <int R = rank, int A = axis, typename std::enable_if_t<A < rank - 1>* = nullptr>
+    template <int R = rank, int A = axis, typename std::enable_if<A < rank - 1>::type* = nullptr>
     selector<rank - 1, axis> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
@@ -415,7 +415,7 @@ struct nd::selector
     std::size_t size() const
     {
         auto s = shape();
-        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<int>());
     }
 
     bool operator==(const selector<rank, axis>& other) const
@@ -533,10 +533,10 @@ std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<
     return shape;
 }
 
-// std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
-// {
-//     return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
-// }
+std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+{
+    return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
+}
 
 std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)
 {
@@ -1047,14 +1047,14 @@ public:
      * 
      */
     // ========================================================================
-    template <int Rank = R, typename std::enable_if_t<Rank == 0>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank == 0>::type* = nullptr>
     ndarray<T, R>& operator=(T value)
     {
         buf->operator[](scalar_offset) = value;
         return *this;
     }
 
-    template <int Rank = R, typename std::enable_if_t<Rank != 0>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank != 0>::type* = nullptr>
     ndarray<T, R>& operator=(T value)
     {
         for (auto& a : *this)
@@ -1122,7 +1122,7 @@ public:
      * 
      */
     // ========================================================================
-    template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank == 1>::type* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
@@ -1131,7 +1131,7 @@ public:
         return {offset_relative({index}), buf};
     }
 
-    template <int Rank = R, typename std::enable_if_t<Rank == 1>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank == 1>::type* = nullptr>
     const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
@@ -1140,7 +1140,7 @@ public:
         return {offset_relative({index}), const_cast<std::shared_ptr<buffer<T>>&>(buf)};
     }
 
-    template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank != 1>::type* = nullptr>
     ndarray<T, R - 1> operator[](int index)
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
@@ -1149,7 +1149,7 @@ public:
         return {sel.select(index), buf};
     }
 
-    template <int Rank = R, typename std::enable_if_t<Rank != 1>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank != 1>::type* = nullptr>
     const ndarray<T, R - 1> operator[](int index) const
     {
         if (index < 0 || index >= (sel.final[0] - sel.start[0]) / sel.skips[0])
@@ -1224,9 +1224,10 @@ public:
         return typename ndarray<T, S.rank>::const_ref(S.reset(), buf);
     }
 
-    template <int Rank = R, typename std::enable_if_t<Rank == 0>* = nullptr>
+    template <int Rank = R, typename std::enable_if<Rank == 0>::type* = nullptr>
     operator T() const
     {
+        // static_assert(rank == 0, "can only convert rank-0 array to scalar value");
         return buf->operator[](scalar_offset);
     }
 
@@ -1487,7 +1488,7 @@ public:
         assert_valid_argument(D == dtype_str<T>::value(), "ndarray string has wrong data type");
         assert_valid_argument(Q == rank, "ndarray string has the wrong rank");
 
-        auto size = std::accumulate(S.begin(), S.end(), 1, std::multiplies<>());
+        auto size = std::accumulate(S.begin(), S.end(), 1, std::multiplies<int>());
         auto wbuf = std::make_shared<buffer<T>>(size);
         auto dest = wbuf->begin();
 

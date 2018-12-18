@@ -107,7 +107,7 @@ struct nd::selector
 
 
     // ========================================================================
-    template <int R = rank, int A = axis, typename std::enable_if_t<A == rank - 1>* = nullptr>
+  template <int R = rank, int A = axis, typename std::enable_if<A == rank - 1>::type* = nullptr>
     selector<rank - 1, axis - 1> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
@@ -133,7 +133,7 @@ struct nd::selector
         return {_count, _start, _final, _skips};
     }
 
-    template <int R = rank, int A = axis, typename std::enable_if_t<A < rank - 1>* = nullptr>
+    template <int R = rank, int A = axis, typename std::enable_if<A < rank - 1>::type* = nullptr>
     selector<rank - 1, axis> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
@@ -305,7 +305,7 @@ struct nd::selector
     std::size_t size() const
     {
         auto s = shape();
-        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<>());
+        return std::accumulate(s.begin(), s.end(), 1, std::multiplies<int>());
     }
 
     bool operator==(const selector<rank, axis>& other) const

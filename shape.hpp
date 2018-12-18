@@ -84,10 +84,10 @@ std::array<std::tuple<int, int>, rank> nd::shape::promote(std::array<std::tuple<
     return shape;
 }
 
-// std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
-// {
-//     return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
-// }
+std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int, int> selection)
+{
+    return {std::make_tuple(std::get<0>(selection), std::get<1>(selection))};
+}
 
 std::array<std::tuple<int, int>, 1> nd::shape::promote(std::tuple<int, int> range)
 {
