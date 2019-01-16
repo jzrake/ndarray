@@ -46,7 +46,7 @@ namespace nd
         }
         while (it != end)
         {
-            sel.count[n++] = *it++;
+            sel.count[n++] = int(*it++);
         }
         return sel;
     }
@@ -217,7 +217,7 @@ struct nd::selector
 
 
     // ========================================================================
-  template <int R = rank, int A = axis, typename std::enable_if<A == rank - 1>::type* = nullptr>
+    template <int R = rank, int A = axis, typename std::enable_if<A == rank - 1>::type* = nullptr>
     selector<rank - 1, axis - 1> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
