@@ -221,60 +221,52 @@ struct nd::selector
     selector<rank - 1, axis - 1> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
-
-        std::array<int, rank - 1> _count;
-        std::array<int, rank - 1> _start;
-        std::array<int, rank - 1> _final;
-        std::array<int, rank - 1> _skips;
+        auto res = selector<rank - 1, axis - 1>();
 
         for (int n = 0; n < rank - 2; ++n)
         {
-            _count[n] = count[n];
-            _start[n] = start[n];
-            _final[n] = final[n];
-            _skips[n] = skips[n];
+            res.count[n] = count[n];
+            res.start[n] = start[n];
+            res.final[n] = final[n];
+            res.skips[n] = skips[n];
         }
 
-        _count[axis - 1] = count[axis] * count[axis - 1];
-        _start[axis - 1] = count[axis] * start[axis - 1] + start[axis];
-        _final[axis - 1] = count[axis] * final[axis - 1] + start[axis];
-        _skips[axis - 1] = count[axis];
+        res.count[axis - 1] = count[axis] * count[axis - 1];
+        res.start[axis - 1] = count[axis] * start[axis - 1] + start[axis];
+        res.final[axis - 1] = count[axis] * final[axis - 1] + start[axis];
+        res.skips[axis - 1] = count[axis];
 
-        return {_count, _start, _final, _skips};
+        return res;
     }
 
     template <int R = rank, int A = axis, typename std::enable_if<A < rank - 1>::type* = nullptr>
     selector<rank - 1, axis> collapse() const
     {
         static_assert(rank > 0, "selector: cannot collapse zero-rank selector");
-
-        std::array<int, rank - 1> _count;
-        std::array<int, rank - 1> _start;
-        std::array<int, rank - 1> _final;
-        std::array<int, rank - 1> _skips;
+        auto res = selector<rank - 1, axis>();
 
         for (int n = 0; n < axis; ++n)
         {
-            _count[n] = count[n];
-            _start[n] = start[n];
-            _final[n] = final[n];
-            _skips[n] = skips[n];
+            res.count[n] = count[n];
+            res.start[n] = start[n];
+            res.final[n] = final[n];
+            res.skips[n] = skips[n];
         }
 
         for (int n = axis + 1; n < rank - 1; ++n)
         {
-            _count[n] = count[n + 1];
-            _start[n] = start[n + 1];
-            _final[n] = final[n + 1];
-            _skips[n] = skips[n + 1];
+            res.count[n] = count[n + 1];
+            res.start[n] = start[n + 1];
+            res.final[n] = final[n + 1];
+            res.skips[n] = skips[n + 1];
         }
 
-        _count[axis] = count[axis + 1] * count[axis];
-        _start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
-        _final[axis] = count[axis + 1] * final[axis] + start[axis + 1];
-        _skips[axis] = 1;
+        res.count[axis] = count[axis + 1] * count[axis];
+        res.start[axis] = count[axis + 1] * start[axis] + start[axis + 1];
+        res.final[axis] = count[axis + 1] * final[axis] + start[axis + 1];
+        res.skips[axis] = 1;
 
-        return {_count, _start, _final, _skips};
+        return res;
     }
 
     selector<rank, axis + 1> skip(int skips_index) const
@@ -284,18 +276,14 @@ struct nd::selector
 
     selector<rank, axis + 1> slice(int lower_index, int upper_index, int skips_index) const
     {
-        static_assert(axis < rank, "selector: cannot select on axis >= rank");
+        static_assert(axis < rank, "selector: cannot select on axis greater than or equal to rank");
+        auto res = selector<rank, axis + 1> { count,  start, final, skips };
 
-        auto _count = count;
-        auto _start = start;
-        auto _final = final;
-        auto _skips = skips;
+        res.start[axis] = start[axis] + lower_index;
+        res.final[axis] = start[axis] + upper_index;
+        res.skips[axis] = skips[axis] * skips_index;
 
-        _start[axis] = start[axis] + lower_index;
-        _final[axis] = start[axis] + upper_index;
-        _skips[axis] = skips[axis] * skips_index;
-
-        return {_count, _start, _final, _skips};
+        return res;
     }
 
     selector<rank, axis + 1> select(axis::selection selection) const
