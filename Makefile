@@ -1,14 +1,11 @@
-CXXFLAGS = -std=c++14 -O0 -Wextra -Wno-missing-braces
-HEADERS = selector.hpp shape.hpp buffer.hpp ndarray.hpp
+CXXFLAGS = -std=c++17 -O0 -Wextra -Wno-missing-braces
+HEADERS = ndarray.hpp
 
 default: test main
 
-main.o: include/ndarray.hpp
+main.o: ndarray.hpp
 
 test.o: $(HEADERS)
-
-include/ndarray.hpp: $(HEADERS)
-	./collate.sh $^ > $@
 
 test: test.o catch.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
