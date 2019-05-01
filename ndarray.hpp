@@ -40,9 +40,9 @@ namespace nd
     template<std::size_t Rank> class jumps_t;
     template<std::size_t Rank> class memory_strides_t;
     template<std::size_t Rank> class access_pattern_t;
-    template<std::size_t Rank> class identity_provider_t;
-    template<std::size_t Rank, typename ValueType> class buffer_provider_t;
-    template<std::size_t Rank, typename ValueType> class mutable_buffer_provider_t;
+    template<std::size_t Rank> class index_provider_t;
+    template<std::size_t Rank, typename ValueType> class shared_provider_t;
+    template<std::size_t Rank, typename ValueType> class unique_provider_t;
     template<typename ValueType> class buffer_t;
 
 
@@ -53,7 +53,7 @@ namespace nd
     template<typename ContainerType, typename Function> class transformed_container_t;
 
 
-    // factory functions
+    // access pattern factory functions
     //=========================================================================
     template<typename... Args> auto make_shape(Args... args);
     template<typename... Args> auto make_index(Args... args);
@@ -64,14 +64,23 @@ namespace nd
     template<std::size_t Rank> auto make_strides_row_major(shape_t<Rank> shape);
     template<std::size_t Rank> auto make_access_pattern(shape_t<Rank> shape);
     template<typename... Args> auto make_access_pattern(Args... args);
-    template<typename... Args> auto make_identity_provider(Args... args);
-    template<typename ValueType, std::size_t Rank> auto make_buffer_provider(shape_t<Rank> shape);
-    template<typename ValueType, typename... Args> auto make_buffer_provider(Args... args);
-    template<typename ValueType, std::size_t Rank> auto make_mutable_buffer_provider(shape_t<Rank> shape);
-    template<typename ValueType, typename... Args> auto make_mutable_buffer_provider(Args... args);
-    template<typename Provider> auto make_array(Provider&&);
-    template<typename Provider> auto make_buffered_array(Provider&&);
+    template<typename... Args> auto make_index_provider(Args... args);
+
+
+    // provider factory functions
+    //=========================================================================
+    template<typename ValueType, std::size_t Rank> auto make_shared_provider(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto make_shared_provider(Args... args);
+    template<typename ValueType, std::size_t Rank> auto make_unique_provider(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto make_unique_provider(Args... args);
+    template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
+    template<typename Provider> auto evaluate_as_unique(Provider&&);
+
+
+    // array factory functions
+    //=========================================================================
     template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
+    template<typename Provider> auto make_array(Provider&&);
 
 
     // std::algorithm wrappers for ranges
@@ -459,6 +468,7 @@ class nd::access_pattern_t
 public:
 
     static constexpr std::size_t rank = Rank;
+    using value_type = index_t<Rank>;
 
     //=========================================================================
     struct iterator
@@ -598,19 +608,35 @@ public:
     {
     }
 
-    const Provider& get_provider() const
-    {
-        return provider;
-    }
-
     template<typename... Args>
     decltype(auto) operator()(Args... args) const
     {
         return provider(accessor.map_index(make_index(args...)));
     }
 
+    template<typename... Args>
+    decltype(auto) operator()(Args... args)
+    {
+        return provider(accessor.map_index(make_index(args...)));
+    }
+
     auto shape() const { return provider.shape(); }
     auto size() const { return provider.size(); }
+
+    const Provider& get_provider() const
+    {
+        return provider;
+    }
+
+    auto unique() const
+    {
+        return make_array(evaluate_as_unique(provider, accessor));
+    }
+
+    auto shared() const
+    {
+        return make_array(evaluate_as_unique(provider, accessor).shared());
+    }
 
 private:
     //=========================================================================
@@ -623,7 +649,7 @@ private:
 
 //=============================================================================
 template<std::size_t Rank>
-class nd::identity_provider_t
+class nd::index_provider_t
 {
 public:
 
@@ -631,7 +657,7 @@ public:
     static constexpr std::size_t rank = Rank;
 
     //=========================================================================
-    identity_provider_t(shape_t<Rank> the_shape) : the_shape(the_shape) {}
+    index_provider_t(shape_t<Rank> the_shape) : the_shape(the_shape) {}
     auto operator()(const index_t<Rank>& index) const { return index; }
     auto shape() const { return the_shape; }
     auto size() { return the_shape.size(); }
@@ -641,12 +667,12 @@ private:
     shape_t<Rank> the_shape;
 };
 
-#include <iostream>
+
 
 
 //=============================================================================
 template<std::size_t Rank, typename ValueType>
-class nd::buffer_provider_t
+class nd::shared_provider_t
 {
 public:
 
@@ -654,7 +680,7 @@ public:
     static constexpr std::size_t rank = Rank;
 
     //=========================================================================
-    buffer_provider_t(nd::shape_t<Rank> the_shape, std::shared_ptr<nd::buffer_t<ValueType>> buffer)
+    shared_provider_t(nd::shape_t<Rank> the_shape, std::shared_ptr<nd::buffer_t<ValueType>> buffer)
     : the_shape(the_shape)
     , strides(make_strides_row_major(the_shape))
     , buffer(buffer)
@@ -686,7 +712,7 @@ private:
 
 //=============================================================================
 template<std::size_t Rank, typename ValueType>
-class nd::mutable_buffer_provider_t
+class nd::unique_provider_t
 {
 public:
 
@@ -694,25 +720,25 @@ public:
     static constexpr std::size_t rank = Rank;
 
     //=========================================================================
-    mutable_buffer_provider_t(nd::shape_t<Rank> the_shape, nd::buffer_t<ValueType>&& buffer)
+    unique_provider_t(nd::shape_t<Rank> the_shape, nd::buffer_t<ValueType>&& buffer)
     : the_shape(the_shape)
     , strides(make_strides_row_major(the_shape))
     , buffer(std::move(buffer))
     {
-        if (the_shape.size() != mutable_buffer_provider_t::buffer.size())
+        if (the_shape.size() != unique_provider_t::buffer.size())
         {
             throw std::logic_error("shape and buffer sizes do not match");
         }
     }
 
-    auto persistent() const &
+    auto shared() const &
     {
-        return buffer_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer));
+        return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer));
     }
 
-    auto persistent() &&
+    auto shared() &&
     {
-        return buffer_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer)));
+        return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer)));
     }
 
     const ValueType& operator()(const index_t<Rank>& index) const
@@ -742,7 +768,6 @@ public:
     const ValueType* data() const { return buffer.data(); }
 
 private:
-
     //=========================================================================
     shape_t<Rank> the_shape;
     memory_strides_t<Rank> strides;
@@ -951,35 +976,35 @@ auto nd::make_access_pattern(Args... args)
 }
 
 template<typename... Args>
-auto nd::make_identity_provider(Args... args)
+auto nd::make_index_provider(Args... args)
 {
-    return identity_provider_t<sizeof...(Args)>(make_shape(args...));
+    return index_provider_t<sizeof...(Args)>(make_shape(args...));
 }
 
 template<typename ValueType, std::size_t Rank>
-auto nd::make_buffer_provider(shape_t<Rank> shape)
+auto nd::make_shared_provider(shape_t<Rank> shape)
 {
     auto buffer = std::make_shared<buffer_t<ValueType>>(shape.size());
-    return buffer_provider_t<Rank, ValueType>(shape, buffer);
+    return shared_provider_t<Rank, ValueType>(shape, buffer);
 }
 
 template<typename ValueType, typename... Args>
-auto nd::make_buffer_provider(Args... args)
+auto nd::make_shared_provider(Args... args)
 {
-    return make_buffer_provider<ValueType>(make_shape(args...));
+    return make_shared_provider<ValueType>(make_shape(args...));
 }
 
 template<typename ValueType, std::size_t Rank>
-auto nd::make_mutable_buffer_provider(shape_t<Rank> shape)
+auto nd::make_unique_provider(shape_t<Rank> shape)
 {
     auto buffer = buffer_t<ValueType>(shape.size());
-    return mutable_buffer_provider_t<Rank, ValueType>(shape, std::move(buffer));
+    return unique_provider_t<Rank, ValueType>(shape, std::move(buffer));
 }
 
 template<typename ValueType, typename... Args>
-auto nd::make_mutable_buffer_provider(Args... args)
+auto nd::make_unique_provider(Args... args)
 {
-    return make_mutable_buffer_provider<ValueType>(make_shape(args...));
+    return make_unique_provider<ValueType>(make_shape(args...));
 }
 
 template<typename Provider, typename Accessor>
@@ -994,15 +1019,23 @@ auto nd::make_array(Provider&& provider)
     return array_t<Provider::rank, Provider>(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
 }
 
-template<typename Provider>
-auto nd::make_buffered_array(Provider&& provider)
+template<typename Provider, typename Accessor>
+auto nd::evaluate_as_unique(Provider&& source_provider, Accessor&& source_accessor)
 {
-    using value_type = typename Provider::value_type;
-    auto transient = make_mutable_buffer_provider<value_type>(provider.shape());
+    using value_type = typename std::remove_reference_t<Provider>::value_type;
+    auto target_shape = source_accessor.shape();
+    auto target_accessor = make_access_pattern(target_shape);
+    auto target_provider = make_unique_provider<value_type>(target_shape);
 
-    for (auto index : make_access_pattern(provider.shape()))
+    for (auto&& [target_index, source_index] : zip(target_accessor, source_accessor))
     {
-        transient(index) = provider(index);
+        target_provider(target_index) = source_provider(source_index);
     }
-    return make_array(std::move(transient).persistent());
+    return target_provider;
+}
+
+template<typename Provider>
+auto nd::evaluate_as_unique(Provider&& provider)
+{
+    return evaluate_as_unique(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
 }

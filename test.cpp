@@ -153,19 +153,6 @@ TEST_CASE("access patterns work OK", "[access_pattern]")
 	}
 }
 
-TEST_CASE("array can be constructed with identity provider", "[array] [identity_provider]")
-{
-	auto A = nd::make_array(nd::make_identity_provider(10), nd::make_access_pattern(10));
-	auto B = nd::make_array(nd::make_identity_provider(10));
-	REQUIRE(A(10) == nd::make_index(10));
-	REQUIRE(B(10) == nd::make_index(10));
-}
-
-TEST_CASE("array can be constructed with buffer provider", "[array] [buffer_provider]")
-{
-	auto provider = nd::make_buffer_provider<double>(20, 10, 5);
-}
-
 TEST_CASE("can create strides", "[memory_strides]")
 {
 	auto strides = nd::make_strides_row_major(nd::make_shape(20, 10, 5));
@@ -175,9 +162,17 @@ TEST_CASE("can create strides", "[memory_strides]")
 	REQUIRE(strides.compute_offset(1, 1, 1) == 56);
 }
 
-TEST_CASE("mutable buffer provider can be constructed", "[array] [buffer_provider] [mutable_buffer_provider]")
+TEST_CASE("array can be constructed with identity provider", "[array] [identity_provider]")
 {
-	auto provider = nd::make_mutable_buffer_provider<double>(20, 10, 5);
+	auto A = nd::make_array(nd::make_index_provider(10), nd::make_access_pattern(10));
+	auto B = nd::make_array(nd::make_index_provider(10));
+	REQUIRE(A(10) == nd::make_index(10));
+	REQUIRE(B(10) == nd::make_index(10));
+}
+
+TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider] [unique_provider]")
+{
+	auto provider = nd::make_unique_provider<double>(20, 10, 5);
 	auto data = provider.data();
 
 	provider(1, 0, 0) = 1;
@@ -188,19 +183,22 @@ TEST_CASE("mutable buffer provider can be constructed", "[array] [buffer_provide
 	REQUIRE(provider(0, 2, 0) == 2);
 	REQUIRE(provider(0, 0, 3) == 3);
 
-	SECTION("can move the provider into an array and get the same data")
+	SECTION("can move the provider into a mutable array and get the same data")
 	{
 		auto A = nd::make_array(std::move(provider));
+		A(1, 2, 3) = 123;
 		REQUIRE(provider.data() == nullptr);
 		REQUIRE(A(1, 0, 0) == 1);
 		REQUIRE(A(0, 2, 0) == 2);
 		REQUIRE(A(0, 0, 3) == 3);
+		REQUIRE(A(1, 2, 3) == 123);
 		REQUIRE(A.get_provider().data() == data);
-		static_assert(std::is_same<decltype(A)::provider_type, nd::mutable_buffer_provider_t<3, double>>::value);
+
+		static_assert(std::is_same<decltype(A)::provider_type, nd::unique_provider_t<3, double>>::value);
 	}
 	SECTION("can copy a mutable version of the provider into an array and get different data")
 	{
-		auto A = nd::make_array(provider.persistent());
+		auto A = nd::make_array(provider.shared());
 		REQUIRE(provider.data() != nullptr);
 		REQUIRE(A(1, 0, 0) == 1);
 		REQUIRE(A(0, 2, 0) == 2);
@@ -209,16 +207,29 @@ TEST_CASE("mutable buffer provider can be constructed", "[array] [buffer_provide
 	}
 	SECTION("can move a mutable version of the provider into an array and get the same data")
 	{
-		auto A = nd::make_array(std::move(provider).persistent());
+		auto A = nd::make_array(std::move(provider).shared());
 		REQUIRE(provider.data() == nullptr);
 		REQUIRE(A(1, 0, 0) == 1);
 		REQUIRE(A(0, 2, 0) == 2);
 		REQUIRE(A(0, 0, 3) == 3);
 		REQUIRE(A.get_provider().data() == data);
 	}
+	SECTION("can create a transient array from an immutable one")
+	{
+		auto A = nd::make_array(std::move(provider).shared());
+		auto a = A;
+		auto B = A.unique();
+		auto b = B;
+		auto C = B.shared(); // cannot assign to C
+		B(1, 2, 3) = 123;
+		REQUIRE(A(1, 2, 3) != 123);
+		REQUIRE(B(1, 2, 3) == 123);
+		REQUIRE(a.get_provider().data() == A.get_provider().data());
+		REQUIRE(b.get_provider().data() != B.get_provider().data());
+	}
 }
 
 TEST_CASE("buffered array can be created from unbuffered array")
 {
-	auto A = nd::make_buffered_array(nd::make_identity_provider(10));
+	auto A = nd::evaluate_as_unique(nd::make_index_provider(10));
 }
