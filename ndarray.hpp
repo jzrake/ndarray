@@ -78,7 +78,9 @@ namespace nd
     template<typename ValueType, typename... Args> auto make_shared_provider(Args... args);
     template<typename ValueType, std::size_t Rank> auto make_unique_provider(shape_t<Rank> shape);
     template<typename ValueType, typename... Args> auto make_unique_provider(Args... args);
+    template<typename Provider, typename Accessor> auto evaluate_as_shared(Provider&&, Accessor&&);
     template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
+    template<typename Provider> auto evaluate_as_shared(Provider&&);
     template<typename Provider> auto evaluate_as_unique(Provider&&);
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
@@ -1074,10 +1076,24 @@ auto nd::evaluate_as_unique(Provider&& source_provider, Accessor&& source_access
     return target_provider;
 }
 
+template<typename Provider, typename Accessor>
+auto nd::evaluate_as_shared(Provider&& source_provider, Accessor&& source_accessor)
+{
+    return evaluate_as_unique(
+        std::forward<Provider>(source_provider),
+        std::forward<Accessor>(source_accessor)).shared();
+}
+
 template<typename Provider>
 auto nd::evaluate_as_unique(Provider&& provider)
 {
     return evaluate_as_unique(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
+}
+
+template<typename Provider>
+auto nd::evaluate_as_shared(Provider&& provider)
+{
+    return evaluate_as_unique(std::forward<Provider>(provider)).shared();
 }
 
 template<typename... ArrayTypes>

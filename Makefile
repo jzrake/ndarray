@@ -1,4 +1,4 @@
-CXXFLAGS = -std=c++17 -O0 -Wextra -Wno-missing-braces
+CXXFLAGS = -std=c++17 -O0 -Wextra -fsanitize=undefined
 HEADERS = ndarray.hpp
 
 default: test main

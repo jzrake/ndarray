@@ -264,9 +264,10 @@ TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider
 	}
 }
 
-TEST_CASE("buffered array can be created from unbuffered array")
+TEST_CASE("shared and unique providers can be built from a function provider", "[evaluate_as_unique] [evaluate_as_shared")
 {
 	auto A = nd::evaluate_as_unique(nd::make_index_provider(10));
+	auto B = nd::evaluate_as_shared(nd::make_index_provider(10));
 }
 
 TEST_CASE("zipped provider can be constructed")
