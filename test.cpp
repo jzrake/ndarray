@@ -1,4 +1,3 @@
-#include <iostream>
 #include "ndarray.hpp"
 #include "catch.hpp"
 
@@ -410,14 +409,26 @@ TEST_CASE("replace operator", "[op_replace]")
     }
     SECTION("replacing the second half of an array with linear values works")
     {
-        // auto A1 = nd::make_array(nd::make_index_provider(10));
-        // auto A2 = nd::make_array(nd::make_index_provider(5));
-        // auto patch = nd::make_access_pattern(10).with_start(5);
-        // auto A3 = A1 | nd::replace(patch, A2);
+        auto A1 = nd::make_array(nd::make_index_provider(10));
+        auto A2 = nd::make_array(nd::make_index_provider(5));
+        auto patch = nd::make_access_pattern(10).with_start(5);
+        auto A3 = A1 | nd::replace(patch, A2);
 
-        // for (auto index : A3.get_accessor())
-        // {
-        //     std::cout << A3(index)[0] << std::endl;
-        // }
+        for (auto index : A3.get_accessor())
+        {
+            REQUIRE(A3(index)[0] == (index[0] < 5 ? index[0] : index[0] - 5));
+        }
+    }
+    SECTION("replacing every other value works")
+    {
+        auto A1 = nd::make_array(nd::make_index_provider(10));
+        auto A2 = nd::make_array(nd::make_index_provider(5));
+        auto patch = nd::make_access_pattern(10).with_start(0).with_jumps(2);
+        auto A3 = A1 | nd::replace(patch, A2);
+
+        for (auto index : A3.get_accessor())
+        {
+            REQUIRE(A3(index)[0] == (index[0] % 2 == 0 ? index[0] / 2 : index[0]));
+        }
     }
 }

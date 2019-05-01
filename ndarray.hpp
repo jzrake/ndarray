@@ -64,6 +64,7 @@ namespace nd
     template<std::size_t Rank, typename ValueType> class unique_provider_t;
     template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
     template<typename ArrayT, typename ArrayF, typename Predicate> class switch_provider_t;
+    template<typename ArrayToPatch, typename ReplacementArray> class replace_provider_t;
 
 
     // provider factory functions
@@ -81,7 +82,10 @@ namespace nd
     template<typename ValueType, std::size_t Rank> auto make_uniform_provider(ValueType value, shape_t<Rank> shape);
     template<typename ValueType, typename... Args> auto make_uniform_provider(ValueType value, Args... args);
     template<typename... ArrayTypes> auto make_zipped_provider(ArrayTypes&&... arrays);
-    template<typename ArrayT, typename ArrayF, typename Predicate> auto make_switch_provider(ArrayT&&, ArrayF&&, Predicate&&);
+    template<typename ArrayT, typename ArrayF, typename Predicate>
+    auto make_switch_provider(ArrayT&&, ArrayF&&, Predicate&&);
+    template<std::size_t Rank, typename ArrayToPatch, typename ReplacementArray>
+    auto make_replace_provider(access_pattern_t<Rank>, ArrayToPatch&&, ReplacementArray&&);
 
 
     // array factory functions
@@ -718,16 +722,9 @@ public:
     template<typename ArrayToPatch>
     auto operator()(ArrayToPatch&& array_to_patch) const
     {
-        auto predicate = [patch=region_to_replace] (auto index)
-        {
-            return patch.generates(index);
-        };
-        auto provider = switch_provider_t<ArrayType, ArrayToPatch, decltype(predicate)>(
-            array_to_patch.shape(),
-            replacement_array,
-            std::forward<ArrayToPatch>(array_to_patch),
-            std::move(predicate));
-        return make_array(std::move(provider), access_pattern_t<rank>(array_to_patch.get_accessor()));
+        return make_array(
+            make_replace_provider(region_to_replace, array_to_patch, replacement_array),
+            access_pattern_t<rank>(array_to_patch.get_accessor()));
     }
 
 private:
@@ -946,7 +943,7 @@ public:
     }
     auto operator()(const index_t<Rank>& index) const { return detail::transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
     auto shape() const { return the_shape; }
-    auto size() { return the_shape.size(); }
+    auto size() const { return the_shape.size(); }
 
 private:
     shape_t<Rank> the_shape;
@@ -975,13 +972,50 @@ public:
     }
     auto operator()(const index_t<rank>& index) const { return predicate(index) ? array1(index) : array2(index); }
     auto shape() const { return the_shape; }
-    auto size() { return the_shape.size(); }
+    auto size() const { return the_shape.size(); }
 
 private:
     shape_t<rank> the_shape;
     ArrayT array1;
     ArrayF array2;
     Predicate predicate;
+};
+
+
+
+
+//=============================================================================
+template<typename ArrayToPatch, typename ReplacementArray>
+class nd::replace_provider_t
+{
+public:
+    using value_type = typename std::remove_reference_t<ArrayToPatch>::value_type;
+    static constexpr std::size_t rank = std::remove_reference_t<ArrayToPatch>::rank;
+
+    replace_provider_t(
+        access_pattern_t<rank> patched_region,
+        ArrayToPatch&& array_to_patch,
+        ReplacementArray&& replacement_array)
+    : patched_region(patched_region)
+    , array_to_patch(array_to_patch)
+    , replacement_array(replacement_array) {}
+
+    auto operator()(const index_t<rank>& index) const
+    {
+        if (patched_region.generates(index))
+        {
+            return replacement_array(patched_region.inverse_map_index(index));
+        }
+        return array_to_patch(index);
+    }
+
+    auto shape() const { return array_to_patch.shape(); }
+    auto size() const { return array_to_patch.size(); }
+
+private:
+    access_pattern_t<rank> patched_region;
+    ArrayToPatch array_to_patch;
+    ReplacementArray replacement_array;
 };
 
 
@@ -1266,6 +1300,18 @@ auto nd::make_switch_provider(ArrayT&& array1, ArrayF&& array2, Predicate&& pred
         std::forward<ArrayT>(array1),
         std::forward<ArrayF>(array2),
         std::forward<Predicate>(predicate));
+}
+
+template<std::size_t Rank, typename ArrayToPatch, typename ReplacementArray>
+auto nd::make_replace_provider(
+    access_pattern_t<Rank> patched_region,
+    ArrayToPatch&& array_to_patch,
+    ReplacementArray&& replacement_array)
+{
+    return replace_provider_t<ArrayToPatch, ReplacementArray>(
+        patched_region,
+        std::forward<ArrayToPatch>(array_to_patch),
+        std::forward<ReplacementArray>(replacement_array));
 }
 
 template<typename Provider, typename Accessor>
