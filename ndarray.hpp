@@ -54,8 +54,6 @@ namespace nd
     template<std::size_t Rank> auto make_strides_row_major(shape_t<Rank> shape);
     template<std::size_t Rank> auto make_access_pattern(shape_t<Rank> shape);
     template<typename... Args> auto make_access_pattern(Args... args);
-    template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
-    template<typename Provider> auto make_array(Provider&&);
 
 
     // provider types
@@ -65,6 +63,7 @@ namespace nd
     template<std::size_t Rank, typename ValueType> class shared_provider_t;
     template<std::size_t Rank, typename ValueType> class unique_provider_t;
     template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
+    template<typename ArrayT, typename ArrayF, typename Predicate> class switch_provider_t;
 
 
     // provider factory functions
@@ -77,17 +76,25 @@ namespace nd
     template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
     template<typename Provider> auto evaluate_as_shared(Provider&&);
     template<typename Provider> auto evaluate_as_unique(Provider&&);
-
     template<std::size_t Rank> auto make_index_provider(shape_t<Rank> shape);
     template<typename... Args> auto make_index_provider(Args... args);
     template<typename ValueType, std::size_t Rank> auto make_uniform_provider(ValueType value, shape_t<Rank> shape);
     template<typename ValueType, typename... Args> auto make_uniform_provider(ValueType value, Args... args);
+    template<typename... ArrayTypes> auto make_zipped_provider(ArrayTypes&&... arrays);
+    template<typename ArrayT, typename ArrayF, typename Predicate> auto make_switch_provider(ArrayT&&, ArrayF&&, Predicate&&);
+
+
+    // array factory functions
+    //=========================================================================
+    template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
+    template<typename Provider> auto make_array(Provider&&);
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
     // array operator support structs
     //=========================================================================
     template<std::size_t Rank> class op_reshape_t;
+    template<typename ArrayType> class op_replace_t;
 
 
     // array operator factory functions
@@ -96,6 +103,7 @@ namespace nd
     auto unique();
     template<std::size_t Rank> auto reshape(shape_t<Rank> shape);
     template<typename... Args> auto reshape(Args... args);
+    template<std::size_t Rank, typename ArrayType> auto replace(access_pattern_t<Rank>, ArrayType&&);
 
 
     // algorithm support structs
@@ -596,6 +604,20 @@ public:
         return result;
     }
 
+    index_t<Rank> inverse_map_index(const index_t<Rank>& mapped_index) const
+    {
+        index_t<Rank> result;
+
+        for (std::size_t n = 0; n < Rank; ++n)
+        {
+            result[n] = (mapped_index[n] - start[n]) / jumps[n];
+        }
+        return result;
+    }
+
+    /**
+     * Return true if this is a valid mapped-from index.
+     */
     bool contains(const index_t<Rank>& index) const
     {
         return shape().contains(index);
@@ -605,6 +627,30 @@ public:
     bool contains(Args... args) const
     {
         return contains(make_index(args...));
+    }
+
+    /**
+     * Return true if an iteration over this accessor would generate the given
+     * index, that is, if it the index included in the set of mapped-to indexes.
+     */
+    bool generates(const index_t<Rank>& mapped_index) const
+    {
+        for (std::size_t n = 0; n < Rank; ++n)
+        {
+            if ((mapped_index[n] <  start[n]) ||
+                (mapped_index[n] >= final[n]) ||
+                (mapped_index[n] -  start[n]) % jumps[n] != 0)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    template<typename... Args>
+    bool generates(Args... args) const
+    {
+        return generates(make_index(args...));
     }
 
     iterator begin() const { return { *this, start }; }
@@ -652,6 +698,48 @@ private:
 
 
 //=============================================================================
+template<typename ArrayType>
+class nd::op_replace_t
+{
+public:
+
+    static constexpr std::size_t rank = std::remove_reference_t<ArrayType>::rank;
+
+    op_replace_t(access_pattern_t<rank> region_to_replace, ArrayType&& replacement_array)
+    : region_to_replace(region_to_replace)
+    , replacement_array(replacement_array)
+    {
+        if (region_to_replace.shape() != replacement_array.shape())
+        {
+            throw std::logic_error("region to replace has a different shape than the replacement array");
+        }
+    }
+
+    template<typename ArrayToPatch>
+    auto operator()(ArrayToPatch&& array_to_patch) const
+    {
+        auto predicate = [patch=region_to_replace] (auto index)
+        {
+            return patch.generates(index);
+        };
+        auto provider = switch_provider_t<ArrayType, ArrayToPatch, decltype(predicate)>(
+            array_to_patch.shape(),
+            replacement_array,
+            std::forward<ArrayToPatch>(array_to_patch),
+            std::move(predicate));
+        return make_array(std::move(provider), access_pattern_t<rank>(array_to_patch.get_accessor()));
+    }
+
+private:
+    //=========================================================================
+    access_pattern_t<rank> region_to_replace;
+    ArrayType replacement_array;
+};
+
+
+
+
+//=============================================================================
 template<std::size_t Rank, typename Provider>
 class nd::array_t
 {
@@ -666,9 +754,7 @@ public:
     //=========================================================================
     array_t(Provider&& provider, Accessor&& accessor)
     : provider(std::move(provider))
-    , accessor(std::move(accessor))
-    {
-    }
+    , accessor(std::move(accessor)) {}
 
     // indexing functions
     //=========================================================================
@@ -711,7 +797,14 @@ public:
 
     //=========================================================================
     index_provider_t(shape_t<Rank> the_shape) : the_shape(the_shape) {}
-    auto operator()(const index_t<Rank>& index) const { return index; }
+    auto operator()(const index_t<Rank>& index) const
+    {
+        if (! the_shape.contains(index))
+        {
+            throw std::out_of_range("index out-of-range on index_provider");
+        }
+        return index;
+    }
     auto shape() const { return the_shape; }
     auto size() { return the_shape.size(); }
 
@@ -848,7 +941,7 @@ public:
     //=========================================================================
     zipped_provider_t(shape_t<Rank> the_shape, ArrayTuple&& arrays)
     : the_shape(the_shape)
-    , arrays(std::move(arrays))
+    , arrays(arrays)
     {
     }
     auto operator()(const index_t<Rank>& index) const { return detail::transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
@@ -858,6 +951,37 @@ public:
 private:
     shape_t<Rank> the_shape;
     ArrayTuple arrays;
+};
+
+
+
+
+//=============================================================================
+template<typename ArrayT, typename ArrayF, typename Predicate>
+class nd::switch_provider_t
+{
+public:
+
+    using value_type = typename std::remove_reference_t<ArrayT>::value_type;
+    static constexpr std::size_t rank = std::remove_reference_t<ArrayT>::rank;
+
+    //=========================================================================
+    switch_provider_t(shape_t<rank> the_shape, ArrayT&& array1, ArrayF&& array2, Predicate&& predicate)
+    : the_shape(the_shape)
+    , array1(array1)
+    , array2(array2)
+    , predicate(predicate)
+    {
+    }
+    auto operator()(const index_t<rank>& index) const { return predicate(index) ? array1(index) : array2(index); }
+    auto shape() const { return the_shape; }
+    auto size() { return the_shape.size(); }
+
+private:
+    shape_t<rank> the_shape;
+    ArrayT array1;
+    ArrayF array2;
+    Predicate predicate;
 };
 
 
@@ -1113,16 +1237,35 @@ auto nd::make_unique_provider(Args... args)
     return make_unique_provider<ValueType>(make_shape(args...));
 }
 
-template<typename Provider, typename Accessor>
-auto nd::make_array(Provider&& provider, Accessor&& accessor)
+template<typename... ArrayTypes>
+auto nd::make_zipped_provider(ArrayTypes&&... arrays)
 {
-    return array_t<Provider::rank, Provider>(std::forward<Provider>(provider), std::forward<Accessor>(accessor));
+    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::forward_as_tuple(arrays...)))>::rank;
+    using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
+    using ArrayTuple = std::tuple<ArrayTypes...>;
+    auto shape = std::get<0>(std::forward_as_tuple(arrays...)).shape();
+
+    auto shapes = {arrays.shape()...};
+
+    if (std::adjacent_find(std::begin(shapes), std::end(shapes), std::not_equal_to<>()) != std::end(shapes))
+    {
+        throw std::logic_error("cannot zip arrays with different shapes");
+    }
+    return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
 }
 
-template<typename Provider>
-auto nd::make_array(Provider&& provider)
+template<typename ArrayT, typename ArrayF, typename Predicate>
+auto nd::make_switch_provider(ArrayT&& array1, ArrayF&& array2, Predicate&& predicate)
 {
-    return array_t<Provider::rank, Provider>(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
+    if (array1.shape() != array2.shape())
+    {
+        throw std::logic_error("ambiguous shape for switch provider");
+    }
+    return switch_provider_t<ArrayT, ArrayF, Predicate>(
+        array1.shape(),
+        std::forward<ArrayT>(array1),
+        std::forward<ArrayF>(array2),
+        std::forward<Predicate>(predicate));
 }
 
 template<typename Provider, typename Accessor>
@@ -1160,21 +1303,31 @@ auto nd::evaluate_as_shared(Provider&& provider)
     return evaluate_as_unique(std::forward<Provider>(provider)).shared();
 }
 
+
+
+
+//=============================================================================
+template<typename Provider, typename Accessor>
+auto nd::make_array(Provider&& provider, Accessor&& accessor)
+{
+    return array_t<Provider::rank, Provider>(
+        std::forward<Provider>(provider),
+        std::forward<Accessor>(accessor));
+}
+
+template<typename Provider>
+auto nd::make_array(Provider&& provider)
+{
+    return array_t<Provider::rank, Provider>(
+        std::forward<Provider>(provider),
+        make_access_pattern(provider.shape()));
+}
+
 template<typename... ArrayTypes>
 auto nd::zip_arrays(ArrayTypes&&... arrays)
 {
-    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::forward_as_tuple(arrays...)))>::rank;
-    using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
-    using ArrayTuple = std::tuple<ArrayTypes...>;
-    auto shape = std::get<0>(std::forward_as_tuple(arrays...)).shape();
-
-    auto shapes = {arrays.shape()...};
-
-    if (std::adjacent_find(std::begin(shapes), std::end(shapes), std::not_equal_to<>()) != std::end(shapes))
-    {
-        throw std::logic_error("cannot zip arrays with different shapes");
-    }
-    return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
+    auto provider = make_zipped_provider(std::forward<ArrayTypes>(arrays)...);
+    return make_array(std::move(provider), provider.shape());
 }
 
 
@@ -1207,4 +1360,10 @@ template<typename... Args>
 auto nd::reshape(Args... args)
 {
     return reshape(make_shape(args...));
+}
+
+template<std::size_t Rank, typename ArrayType>
+auto nd::replace(access_pattern_t<Rank> region_to_replace, ArrayType&& replacement_array)
+{
+    return op_replace_t<ArrayType>(region_to_replace, std::forward<ArrayType>(replacement_array));
 }
