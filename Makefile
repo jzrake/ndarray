@@ -10,7 +10,7 @@ test.o: $(HEADERS)
 test: test.o catch.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
-main: main.o other.o
+main: main.o
 	$(CXX) -o $@ $(CXXFLAGS) $^
 
 clean:

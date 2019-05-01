@@ -31,22 +31,26 @@ namespace nd
 {
 
 
-    // buffer view support structs
+    // array support structs
     //=========================================================================
     template<std::size_t Rank, typename ValueType, typename DerivedType> class short_sequence_t;
+    template<std::size_t Rank, typename Provider> class array_t;
     template<std::size_t Rank> class shape_t;
     template<std::size_t Rank> class index_t;
     template<std::size_t Rank> class jumps_t;
+    template<std::size_t Rank> class memory_strides_t;
     template<std::size_t Rank> class access_pattern_t;
-    template<typename ValueType> class buffer_t;
-    template<std::size_t Rank, typename Provider> class array_t;
     template<std::size_t Rank> class identity_provider_t;
+    template<std::size_t Rank, typename ValueType> class buffer_provider_t;
+    template<std::size_t Rank, typename ValueType> class mutable_buffer_provider_t;
+    template<typename ValueType> class buffer_t;
 
 
     // algorithm support structs
     //=========================================================================
     template<typename ValueType> class range_container_t;
-    template<typename TupleType, typename ValueType> class zipped_container_t;
+    template<typename ValueType, typename ContainerTuple> class zipped_container_t;
+    template<typename ContainerType, typename Function> class transformed_container_t;
 
 
     // factory functions
@@ -57,10 +61,16 @@ namespace nd
     template<std::size_t Rank, typename Arg> auto make_uniform_shape(Arg arg);
     template<std::size_t Rank, typename Arg> auto make_uniform_index(Arg arg);
     template<std::size_t Rank, typename Arg> auto make_uniform_jumps(Arg arg);
+    template<std::size_t Rank> auto make_strides_row_major(shape_t<Rank> shape);
     template<std::size_t Rank> auto make_access_pattern(shape_t<Rank> shape);
     template<typename... Args> auto make_access_pattern(Args... args);
     template<typename... Args> auto make_identity_provider(Args... args);
+    template<typename ValueType, std::size_t Rank> auto make_buffer_provider(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto make_buffer_provider(Args... args);
+    template<typename ValueType, std::size_t Rank> auto make_mutable_buffer_provider(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto make_mutable_buffer_provider(Args... args);
     template<typename Provider> auto make_array(Provider&&);
+    template<typename Provider> auto make_buffered_array(Provider&&);
     template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
 
 
@@ -74,79 +84,6 @@ namespace nd
     template<typename ValueType> auto range(ValueType count);
     template<typename... ContainerTypes> auto zip(ContainerTypes&&... containers);
 }
-
-
-
-
-//=============================================================================
-template<typename TupleType, typename ValueType>
-class nd::zipped_container_t
-{
-public:
-    using value_type = ValueType;
-
-    //=========================================================================
-    template<typename IteratorTuple>
-    struct iterator
-    {
-        using iterator_category = std::input_iterator_tag;
-        using value_type = ValueType;
-        using difference_type = std::ptrdiff_t;
-        using pointer = value_type*;
-        using reference = value_type&;
-
-        iterator& operator++()
-        {
-            iterators = transform_tuple([] (auto x) { return ++x; }, iterators);
-            return *this;
-        }
-
-        bool operator!=(const iterator& other) const
-        {
-            return iterators != other.iterators;
-        }
-
-        auto operator*() const
-        {
-            return transform_tuple([] (const auto& x) { return std::ref(*x); }, iterators);
-        }
-
-        IteratorTuple iterators;
-    };
-
-    //=========================================================================
-    zipped_container_t(TupleType&& containers) : containers(std::move(containers))
-    {
-    }
-
-    auto begin() const
-    {
-        auto res = transform_tuple([] (const auto& x) { return std::begin(x); }, containers);
-        return iterator<decltype(res)>{res};
-    }
-
-    auto end() const
-    {
-        auto res = transform_tuple([] (const auto& x) { return std::end(x); }, containers);
-        return iterator<decltype(res)>{res};
-    }
-
-private:
-    //=========================================================================
-    template<typename Function, typename Tuple, std::size_t... Is>
-    static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
-    {
-        return std::make_tuple(fn(std::get<Is>(t))...);
-    }
-
-    template<typename Function, typename Tuple>
-    static auto transform_tuple(Function&& fn, const Tuple& t)
-    {
-        return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
-    }
-
-    TupleType containers;
-};
 
 
 
@@ -182,10 +119,139 @@ public:
     iterator begin() const { return { 0, start, final }; }
     iterator end() const { return { final, start, final }; }
 
+    template<typename Function>
+    auto operator|(Function&& fn) const
+    {
+        return transformed_container_t<range_container_t, Function>(*this, fn);
+    }
+
 private:
     //=========================================================================
     ValueType start = 0;
     ValueType final = 0;
+};
+
+
+
+
+//=============================================================================
+template<typename ValueType, typename ContainerTuple>
+class nd::zipped_container_t
+{
+public:
+    using value_type = ValueType;
+
+    //=========================================================================
+    template<typename IteratorTuple>
+    struct iterator
+    {
+        using iterator_category = std::input_iterator_tag;
+        using value_type = value_type;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        iterator& operator++()
+        {
+            iterators = transform_tuple([] (auto x) { return ++x; }, iterators);
+            return *this;
+        }
+
+        bool operator!=(const iterator& other) const
+        {
+            return iterators != other.iterators;
+        }
+
+        auto operator*() const
+        {
+            return transform_tuple([] (const auto& x) { return std::ref(*x); }, iterators);
+        }
+
+        IteratorTuple iterators;
+    };
+
+    //=========================================================================
+    zipped_container_t(ContainerTuple&& containers) : containers(std::move(containers))
+    {
+    }
+
+    auto begin() const
+    {
+        auto res = transform_tuple([] (const auto& x) { return std::begin(x); }, containers);
+        return iterator<decltype(res)>{res};
+    }
+
+    auto end() const
+    {
+        auto res = transform_tuple([] (const auto& x) { return std::end(x); }, containers);
+        return iterator<decltype(res)>{res};
+    }
+
+    template<typename Function>
+    auto operator|(Function&& fn) const
+    {
+        return transformed_container_t<zipped_container_t, Function>(*this, fn);
+    }
+
+private:
+    //=========================================================================
+    template<typename Function, typename Tuple, std::size_t... Is>
+    static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
+    {
+        return std::make_tuple(fn(std::get<Is>(t))...);
+    }
+
+    template<typename Function, typename Tuple>
+    static auto transform_tuple(Function&& fn, const Tuple& t)
+    {
+        return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
+    }
+
+    ContainerTuple containers;
+};
+
+
+
+
+//=============================================================================
+template<typename ContainerType, typename Function>
+class nd::transformed_container_t
+{
+public:
+    using value_type = std::invoke_result_t<Function, typename ContainerType::value_type>;
+
+    //=========================================================================
+    template<typename IteratorType>
+    struct iterator
+    {
+        using iterator_category = std::input_iterator_tag;
+        using value_type = value_type;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        iterator& operator++() { ++current; return *this; }
+        bool operator==(const iterator& other) const { return current == other.current; }
+        bool operator!=(const iterator& other) const { return current != other.current; }
+        auto operator*() const { return function(*current); }
+
+        IteratorType current;
+        const Function& function;
+    };
+
+    //=========================================================================
+    transformed_container_t(const ContainerType& container, const Function& function)
+    : container(container)
+    , function(function)
+    {
+    }
+    auto begin() const { return iterator<decltype(container.begin())> {container.begin(), function}; }
+    auto end() const { return iterator<decltype(container.end())> {container.end(), function}; }
+
+private:
+    //=========================================================================
+    const ContainerType& container;
+    const Function& function;
 };
 
 
@@ -231,9 +297,9 @@ auto nd::range(ValueType count)
 template<typename... ContainerTypes>
 auto nd::zip(ContainerTypes&&... containers)
 {
-    using TupleType = std::tuple<ContainerTypes...>;
     using ValueType = std::tuple<typename std::remove_reference_t<ContainerTypes>::value_type...>;
-    return nd::zipped_container_t<TupleType, ValueType>(std::forward_as_tuple(containers...));
+    using ContainerTuple = std::tuple<ContainerTypes...>;
+    return nd::zipped_container_t<ValueType, ContainerTuple>(std::forward_as_tuple(containers...));
 }
 
 
@@ -358,6 +424,29 @@ class nd::jumps_t : public nd::short_sequence_t<Rank, long, jumps_t<Rank>>
 {
 public:
     using short_sequence_t<Rank, long, jumps_t<Rank>>::short_sequence_t;
+};
+
+
+
+
+//=============================================================================
+template<std::size_t Rank>
+class nd::memory_strides_t : public nd::short_sequence_t<Rank, std::size_t, memory_strides_t<Rank>>
+{
+public:
+    using short_sequence_t<Rank, std::size_t, memory_strides_t<Rank>>::short_sequence_t;
+
+    std::size_t compute_offset(const index_t<Rank>& index) const
+    {
+        auto mul_tuple = [] (auto t) { return std::get<0>(t) * std::get<1>(t); };
+        return accumulate(zip(index, *this) | mul_tuple, 0, std::plus<>());
+    }
+
+    template<typename... Args>
+    std::size_t compute_offset(Args... args) const
+    {
+        return compute_offset(make_index(args...));
+    }
 };
 
 
@@ -497,21 +586,34 @@ class nd::array_t
 {
 public:
 
-    using value_type = typename Provider::value_type;
     using Accessor = access_pattern_t<Rank>;
+    using provider_type = Provider;
+    using accessor_type = Accessor;
+    using value_type = typename Provider::value_type;
 
-    array_t(Provider provider, Accessor accessor) : provider(provider), accessor(accessor) {}
+    //=========================================================================
+    array_t(Provider&& provider, Accessor&& accessor)
+    : provider(std::move(provider))
+    , accessor(std::move(accessor))
+    {
+    }
 
-    auto shape() const { return provider.shape(); }
-    std::size_t size() const { return accumulate(shape(), 1, std::multiplies<>()); }
+    const Provider& get_provider() const
+    {
+        return provider;
+    }
 
     template<typename... Args>
-    value_type operator()(Args... args) const
+    decltype(auto) operator()(Args... args) const
     {
         return provider(accessor.map_index(make_index(args...)));
     }
 
+    auto shape() const { return provider.shape(); }
+    auto size() const { return provider.size(); }
+
 private:
+    //=========================================================================
     Provider provider;
     Accessor accessor;
 };
@@ -519,7 +621,7 @@ private:
 
 
 
-//=========================================================================
+//=============================================================================
 template<std::size_t Rank>
 class nd::identity_provider_t
 {
@@ -529,82 +631,123 @@ public:
     static constexpr std::size_t rank = Rank;
 
     //=========================================================================
-    identity_provider_t(nd::shape_t<Rank> the_shape) : the_shape(the_shape) {}
-    auto operator()(const nd::index_t<Rank>& i) const { return i; }
+    identity_provider_t(shape_t<Rank> the_shape) : the_shape(the_shape) {}
+    auto operator()(const index_t<Rank>& index) const { return index; }
     auto shape() const { return the_shape; }
+    auto size() { return the_shape.size(); }
 
 private:
     //=========================================================================
-    nd::shape_t<Rank> the_shape;
+    shape_t<Rank> the_shape;
+};
+
+#include <iostream>
+
+
+//=============================================================================
+template<std::size_t Rank, typename ValueType>
+class nd::buffer_provider_t
+{
+public:
+
+    using value_type = ValueType;
+    static constexpr std::size_t rank = Rank;
+
+    //=========================================================================
+    buffer_provider_t(nd::shape_t<Rank> the_shape, std::shared_ptr<nd::buffer_t<ValueType>> buffer)
+    : the_shape(the_shape)
+    , strides(make_strides_row_major(the_shape))
+    , buffer(buffer)
+    {
+        if (the_shape.size() != buffer->size())
+        {
+            throw std::logic_error("shape and buffer sizes do not match");
+        }
+    }
+
+    const ValueType& operator()(const index_t<Rank>& index) const
+    {
+        return buffer->operator[](strides.compute_offset(index));
+    }
+
+    auto shape() const { return the_shape; }
+    auto size() const { return the_shape.size(); }
+    const ValueType* data() const { return buffer->data(); }
+
+private:
+    //=========================================================================
+    shape_t<Rank> the_shape;
+    memory_strides_t<Rank> strides;
+    std::shared_ptr<buffer_t<ValueType>> buffer;
 };
 
 
 
 
 //=============================================================================
-template<typename... Args>
-auto nd::make_shape(Args... args)
+template<std::size_t Rank, typename ValueType>
+class nd::mutable_buffer_provider_t
 {
-    return shape_t<sizeof...(Args)>({std::size_t(args)...});
-}
+public:
 
-template<typename... Args>
-auto nd::make_index(Args... args)
-{
-    return index_t<sizeof...(Args)>({std::size_t(args)...});
-}
+    using value_type = ValueType;
+    static constexpr std::size_t rank = Rank;
 
-template<typename... Args>
-auto nd::make_jumps(Args... args)
-{
-    return jumps_t<sizeof...(Args)>({long(args)...});
-}
+    //=========================================================================
+    mutable_buffer_provider_t(nd::shape_t<Rank> the_shape, nd::buffer_t<ValueType>&& buffer)
+    : the_shape(the_shape)
+    , strides(make_strides_row_major(the_shape))
+    , buffer(std::move(buffer))
+    {
+        if (the_shape.size() != mutable_buffer_provider_t::buffer.size())
+        {
+            throw std::logic_error("shape and buffer sizes do not match");
+        }
+    }
 
-template<size_t Rank, typename Arg>
-auto nd::make_uniform_shape(Arg arg)
-{
-    return shape_t<Rank>::uniform(arg);
-}
+    auto persistent() const &
+    {
+        return buffer_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer));
+    }
 
-template<size_t Rank, typename Arg>
-auto nd::make_uniform_index(Arg arg)
-{
-    return index_t<Rank>::uniform(arg);
-}
+    auto persistent() &&
+    {
+        return buffer_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer)));
+    }
 
-template<size_t Rank, typename Arg>
-auto nd::make_uniform_jumps(Arg arg)
-{
-    return jumps_t<Rank>::uniform(arg);
-}
+    const ValueType& operator()(const index_t<Rank>& index) const
+    {
+        return buffer.operator[](strides.compute_offset(index));
+    }
 
-template<typename... Args> auto nd::make_access_pattern(Args... args)
-{
-    return access_pattern_t<sizeof...(Args)>().with_final(args...);
-}
+    template<typename... Args>
+    const ValueType& operator()(Args... args) const
+    {
+        return operator()(make_index(args...));
+    }
 
-template<std::size_t Rank>
-auto nd::make_access_pattern(shape_t<Rank> shape)
-{
-    return access_pattern_t<Rank>().with_final(index_t<Rank>::from_range(shape));
-}
+    ValueType& operator()(const index_t<Rank>& index)
+    {
+        return buffer.operator[](strides.compute_offset(index));
+    }
 
-template<typename... Args> auto nd::make_identity_provider(Args... args)
-{
-    return identity_provider_t<sizeof...(Args)>(make_shape(args...));
-}
+    template<typename... Args>
+    ValueType& operator()(Args... args)
+    {
+        return operator()(make_index(args...));
+    }
 
-template<typename Provider, typename Accessor>
-auto nd::make_array(Provider&& provider, Accessor&& accessor)
-{
-    return array_t<Provider::rank, Provider>(provider, accessor);
-}
+    auto shape() const { return the_shape; }
+    auto size() const { return the_shape.size(); }
+    const ValueType* data() const { return buffer.data(); }
 
-template<typename Provider>
-auto nd::make_array(Provider&& provider)
-{
-    return array_t<Provider::rank, Provider>(provider, make_access_pattern(provider.shape()));
-}
+private:
+
+    //=========================================================================
+    shape_t<Rank> the_shape;
+    memory_strides_t<Rank> strides;
+    buffer_t<ValueType> buffer;
+};
 
 
 
@@ -627,7 +770,7 @@ public:
         count = other.count;
         memory = new ValueType[count];
 
-        for (int n = 0; n < count; ++n)
+        for (std::size_t n = 0; n < count; ++n)
         {
             memory[n] = other.memory[n];
         }
@@ -653,8 +796,8 @@ public:
         }
     }
 
-    template<class InputIt>
-    buffer_t(InputIt first, InputIt last)
+    template<class IteratorType>
+    buffer_t(IteratorType first, IteratorType last)
     : count(std::distance(first, last))
     , memory(new ValueType[count])
     {
@@ -670,7 +813,7 @@ public:
         count = other.count;
         memory = new ValueType[count];
 
-        for (int n = 0; n < count; ++n)
+        for (std::size_t n = 0; n < count; ++n)
         {
             memory[n] = other.memory[n];
         }
@@ -738,3 +881,128 @@ private:
     std::size_t count = 0;
     ValueType* memory = nullptr;
 };
+
+
+
+
+//=============================================================================
+template<typename... Args>
+auto nd::make_shape(Args... args)
+{
+    return shape_t<sizeof...(Args)>({std::size_t(args)...});
+}
+
+template<typename... Args>
+auto nd::make_index(Args... args)
+{
+    return index_t<sizeof...(Args)>({std::size_t(args)...});
+}
+
+template<typename... Args>
+auto nd::make_jumps(Args... args)
+{
+    return jumps_t<sizeof...(Args)>({long(args)...});
+}
+
+template<std::size_t Rank, typename Arg>
+auto nd::make_uniform_shape(Arg arg)
+{
+    return shape_t<Rank>::uniform(arg);
+}
+
+template<std::size_t Rank, typename Arg>
+auto nd::make_uniform_index(Arg arg)
+{
+    return index_t<Rank>::uniform(arg);
+}
+
+template<std::size_t Rank, typename Arg>
+auto nd::make_uniform_jumps(Arg arg)
+{
+    return jumps_t<Rank>::uniform(arg);
+}
+
+template<std::size_t Rank>
+auto nd::make_strides_row_major(shape_t<Rank> shape)
+{
+    memory_strides_t<Rank> result;
+    result[Rank - 1] = 1;
+
+    if constexpr (Rank > 1)
+    {
+        for (int n = Rank - 2; n >= 0; --n)
+        {
+            result[n] = result[n + 1] * shape[n + 1];
+        }
+    }
+    return result;
+}
+
+template<std::size_t Rank>
+auto nd::make_access_pattern(shape_t<Rank> shape)
+{
+    return access_pattern_t<Rank>().with_final(index_t<Rank>::from_range(shape));
+}
+
+template<typename... Args>
+auto nd::make_access_pattern(Args... args)
+{
+    return access_pattern_t<sizeof...(Args)>().with_final(args...);
+}
+
+template<typename... Args>
+auto nd::make_identity_provider(Args... args)
+{
+    return identity_provider_t<sizeof...(Args)>(make_shape(args...));
+}
+
+template<typename ValueType, std::size_t Rank>
+auto nd::make_buffer_provider(shape_t<Rank> shape)
+{
+    auto buffer = std::make_shared<buffer_t<ValueType>>(shape.size());
+    return buffer_provider_t<Rank, ValueType>(shape, buffer);
+}
+
+template<typename ValueType, typename... Args>
+auto nd::make_buffer_provider(Args... args)
+{
+    return make_buffer_provider<ValueType>(make_shape(args...));
+}
+
+template<typename ValueType, std::size_t Rank>
+auto nd::make_mutable_buffer_provider(shape_t<Rank> shape)
+{
+    auto buffer = buffer_t<ValueType>(shape.size());
+    return mutable_buffer_provider_t<Rank, ValueType>(shape, std::move(buffer));
+}
+
+template<typename ValueType, typename... Args>
+auto nd::make_mutable_buffer_provider(Args... args)
+{
+    return make_mutable_buffer_provider<ValueType>(make_shape(args...));
+}
+
+template<typename Provider, typename Accessor>
+auto nd::make_array(Provider&& provider, Accessor&& accessor)
+{
+    return array_t<Provider::rank, Provider>(std::forward<Provider>(provider), std::forward<Accessor>(accessor));
+}
+
+template<typename Provider>
+auto nd::make_array(Provider&& provider)
+{
+    return array_t<Provider::rank, Provider>(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
+}
+
+template<typename Provider>
+auto nd::make_buffered_array(Provider&& provider)
+{
+    using value_type = typename Provider::value_type;
+    auto transient = make_mutable_buffer_provider<value_type>(provider.shape());
+
+    for (auto index : make_access_pattern(provider.shape()))
+    {
+        transient(index) = provider(index);
+    }
+    return make_array(std::move(transient).persistent());
+}
