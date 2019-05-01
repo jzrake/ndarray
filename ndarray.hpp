@@ -100,6 +100,24 @@ namespace nd
     template<typename Range> auto enumerate(Range&& rng);
     template<typename ValueType> auto range(ValueType count);
     template<typename... ContainerTypes> auto zip(ContainerTypes&&... containers);
+
+
+    // helper functions
+    //=========================================================================
+    namespace detail
+    {
+        template<typename Function, typename Tuple, std::size_t... Is>
+        static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
+        {
+            return std::make_tuple(fn(std::get<Is>(t))...);
+        }
+
+        template<typename Function, typename Tuple>
+        static auto transform_tuple(Function&& fn, const Tuple& t)
+        {
+            return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
+        }
+    }
 }
 
 
@@ -171,19 +189,12 @@ public:
 
         iterator& operator++()
         {
-            iterators = transform_tuple([] (auto x) { return ++x; }, iterators);
+            iterators = detail::transform_tuple([] (auto x) { return ++x; }, iterators);
             return *this;
         }
-
-        bool operator!=(const iterator& other) const
-        {
-            return iterators != other.iterators;
-        }
-
-        auto operator*() const
-        {
-            return transform_tuple([] (const auto& x) { return std::ref(*x); }, iterators);
-        }
+        bool operator==(const iterator& other) const { return iterators == other.iterators; }
+        bool operator!=(const iterator& other) const { return iterators != other.iterators; }
+        auto operator*() const { return detail::transform_tuple([] (const auto& x) { return std::ref(*x); }, iterators); }
 
         IteratorTuple iterators;
     };
@@ -195,13 +206,13 @@ public:
 
     auto begin() const
     {
-        auto res = transform_tuple([] (const auto& x) { return std::begin(x); }, containers);
-        return iterator<decltype(res)>{res};
+        auto res = detail::transform_tuple([] (const auto& x) { return std::begin(x); }, containers);
+         return iterator<decltype(res)>{res};
     }
 
     auto end() const
     {
-        auto res = transform_tuple([] (const auto& x) { return std::end(x); }, containers);
+        auto res = detail::transform_tuple([] (const auto& x) { return std::end(x); }, containers);
         return iterator<decltype(res)>{res};
     }
 
@@ -213,18 +224,6 @@ public:
 
 private:
     //=========================================================================
-    template<typename Function, typename Tuple, std::size_t... Is>
-    static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
-    {
-        return std::make_tuple(fn(std::get<Is>(t))...);
-    }
-
-    template<typename Function, typename Tuple>
-    static auto transform_tuple(Function&& fn, const Tuple& t)
-    {
-        return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
-    }
-
     ContainerTuple containers;
 };
 
@@ -704,6 +703,8 @@ public:
     auto size() const { return the_shape.size(); }
     const ValueType* data() const { return buffer->data(); }
 
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return shared_provider_t<NewRank, ValueType>(new_shape, buffer); }
+
 private:
     //=========================================================================
     shape_t<Rank> the_shape;
@@ -735,41 +736,20 @@ public:
         }
     }
 
-    auto shared() const &
-    {
-        return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer));
-    }
-
-    auto shared() &&
-    {
-        return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer)));
-    }
-
-    const ValueType& operator()(const index_t<Rank>& index) const
-    {
-        return buffer.operator[](strides.compute_offset(index));
-    }
-
-    template<typename... Args>
-    const ValueType& operator()(Args... args) const
-    {
-        return operator()(make_index(args...));
-    }
-
-    ValueType& operator()(const index_t<Rank>& index)
-    {
-        return buffer.operator[](strides.compute_offset(index));
-    }
-
-    template<typename... Args>
-    ValueType& operator()(Args... args)
-    {
-        return operator()(make_index(args...));
-    }
+    const ValueType& operator()(const index_t<Rank>& index) const { return buffer.operator[](strides.compute_offset(index)); }
+    /* */ ValueType& operator()(const index_t<Rank>& index)       { return buffer.operator[](strides.compute_offset(index)); }
+    template<typename... Args> const ValueType& operator()(Args... args) const { return operator()(make_index(args...)); }
+    template<typename... Args> /* */ ValueType& operator()(Args... args)       { return operator()(make_index(args...)); }
 
     auto shape() const { return the_shape; }
     auto size() const { return the_shape.size(); }
     const ValueType* data() const { return buffer.data(); }
+
+    auto shared() const & { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer)); }
+    auto shared()      && { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer))); }
+
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const & { return unique_provider_t<NewRank, ValueType>(new_shape, buffer_t(buffer)); }
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape)      && { return unique_provider_t<NewRank, ValueType>(new_shape, std::move(buffer)); }
 
 private:
     //=========================================================================
@@ -796,24 +776,11 @@ public:
     , arrays(std::move(arrays))
     {
     }
-    auto operator()(const index_t<Rank>& index) const { return transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
+    auto operator()(const index_t<Rank>& index) const { return detail::transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
     auto shape() const { return the_shape; }
     auto size() { return the_shape.size(); }
 
 private:
-    //=========================================================================
-    template<typename Function, typename Tuple, std::size_t... Is>
-    static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
-    {
-        return std::make_tuple(fn(std::get<Is>(t))...);
-    }
-
-    template<typename Function, typename Tuple>
-    static auto transform_tuple(Function&& fn, const Tuple& t)
-    {
-        return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
-    }
-
     shape_t<Rank> the_shape;
     ArrayTuple arrays;
 };
@@ -1103,6 +1070,12 @@ auto nd::zip_arrays(ArrayTypes&&... arrays)
     using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
     using ArrayTuple = std::tuple<ArrayTypes...>;
     auto shape = std::get<0>(std::forward_as_tuple(arrays...)).shape();
+
+    auto shapes = {arrays.shape()...};
+
+    if (std::adjacent_find(std::begin(shapes), std::end(shapes), std::not_equal_to<>()) != std::end(shapes))
+    {
+        throw std::logic_error("cannot zip arrays with different shapes");
+    }
     return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
 }
-

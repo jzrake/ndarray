@@ -270,11 +270,36 @@ TEST_CASE("shared and unique providers can be built from a function provider", "
 	auto B = nd::evaluate_as_shared(nd::make_index_provider(10));
 }
 
-TEST_CASE("zipped provider can be constructed")
+TEST_CASE("zipped provider can be constructed", "[zipped_provider] [zip_arrays]")
 {
 	auto fac = [] (int n, int m) { return nd::make_array(nd::make_unique_provider<double>(n, m)); };
 	auto zipped = nd::zip_arrays(fac(10, 10), fac(10, 10));
 
-	auto p = nd::make_unique_provider<double>(10, 10);
 	REQUIRE(zipped(nd::make_index(0, 0)) == std::make_tuple(0, 0));
+
+	SECTION("zip_arrays throws if the arrays have diferent shapes")
+	{
+		REQUIRE_THROWS(nd::zip_arrays(fac(10, 10), fac(9, 9)));
+	}
+}
+
+TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider]")
+{
+	SECTION("unique")
+	{
+		auto provider = nd::make_unique_provider<double>(10, 10);
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(10, 10)));
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(5, 20)));
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(5, 5, 4)));
+		REQUIRE_THROWS(provider.reshape(nd::make_shape(10, 10, 10)));
+	}
+	SECTION("shared")
+	{
+		auto provider = nd::make_shared_provider<double>(10, 10);
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(10, 10)));
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(5, 20)));
+		REQUIRE_NOTHROW(provider.reshape(nd::make_shape(5, 5, 4)));
+		REQUIRE_THROWS(provider.reshape(nd::make_shape(10, 10, 10)));
+		REQUIRE(provider.reshape(nd::make_shape(5, 5, 4)).data() == provider.data());
+	}
 }
