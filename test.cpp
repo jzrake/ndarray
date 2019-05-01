@@ -360,7 +360,7 @@ TEST_CASE("switch provider can be constructed", "[switch_provider]")
         nd::make_array(nd::make_index_provider(9)), predicate));
 }
 
-TEST_CASE("replace operator", "[op_replace]")
+TEST_CASE("replace operator works as expected", "[op_replace]")
 {
     SECTION("trying to replace a region with an array of the wrong size throws")
     {
@@ -430,5 +430,16 @@ TEST_CASE("replace operator", "[op_replace]")
         {
             REQUIRE(A3(index)[0] == (index[0] % 2 == 0 ? index[0] / 2 : index[0]));
         }
+    }
+}
+
+TEST_CASE("transform operator works as expected", "[op_transform]")
+{
+    auto A1 = nd::make_array(nd::make_index_provider(10));
+    auto A2 = A1 | nd::transform([] (auto i) { return i[0] * 2.0; });
+
+    for (auto index : A2.get_accessor())
+    {
+        REQUIRE(A2(index) == index[0] * 2.0);
     }
 }
