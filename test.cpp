@@ -205,6 +205,17 @@ TEST_CASE("array can be constructed with identity provider", "[array] [identity_
 	REQUIRE(B(10) == nd::make_index(10));
 }
 
+TEST_CASE("uniform provider can be constructed", "[uniform_provider]")
+{
+	auto p = nd::make_uniform_provider(1.0, 10, 20, 40);
+	auto q = p.reshape(nd::make_shape(5, 2, 10, 2, 20, 2));
+	REQUIRE(p(nd::make_index(0, 0, 0)) == 1.0);
+	REQUIRE(p(nd::make_index(9, 19, 39)) == 1.0);
+	REQUIRE(q(nd::make_index(0, 0, 0, 0, 0, 0)) == 1.0);
+	REQUIRE(q(nd::make_index(4, 1, 9, 1, 19, 1)) == 1.0);
+	REQUIRE(p.size() == q.size());
+}
+
 TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider] [unique_provider]")
 {
 	auto provider = nd::make_unique_provider<double>(20, 10, 5);
@@ -283,7 +294,7 @@ TEST_CASE("zipped provider can be constructed", "[zipped_provider] [zip_arrays]"
 	}
 }
 
-TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider]")
+TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider] [reshape]")
 {
 	SECTION("unique")
 	{
@@ -302,4 +313,11 @@ TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider]")
 		REQUIRE_THROWS(provider.reshape(nd::make_shape(10, 10, 10)));
 		REQUIRE(provider.reshape(nd::make_shape(5, 5, 4)).data() == provider.data());
 	}
+}
+
+TEST_CASE("arrays can be reshaped given a reshapable provider", "[unique_provider] [reshape]")
+{
+	auto A = nd::make_array(nd::make_unique_provider<double>(10, 10));
+	REQUIRE_NOTHROW(A.reshape(2, 50));
+	REQUIRE_THROWS(A.reshape(2, 51));
 }

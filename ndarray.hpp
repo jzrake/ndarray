@@ -46,6 +46,7 @@ namespace nd
     // provider types
     //=========================================================================
     template<std::size_t Rank> class index_provider_t;
+    template<std::size_t Rank, typename ValueType> class uniform_provider_t;
     template<std::size_t Rank, typename ValueType> class shared_provider_t;
     template<std::size_t Rank, typename ValueType> class unique_provider_t;
     template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
@@ -69,7 +70,6 @@ namespace nd
     template<std::size_t Rank> auto make_strides_row_major(shape_t<Rank> shape);
     template<std::size_t Rank> auto make_access_pattern(shape_t<Rank> shape);
     template<typename... Args> auto make_access_pattern(Args... args);
-    template<typename... Args> auto make_index_provider(Args... args);
 
 
     // provider factory functions
@@ -82,6 +82,11 @@ namespace nd
     template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
     template<typename Provider> auto evaluate_as_shared(Provider&&);
     template<typename Provider> auto evaluate_as_unique(Provider&&);
+
+    template<std::size_t Rank> auto make_index_provider(shape_t<Rank> shape);
+    template<typename... Args> auto make_index_provider(Args... args);
+    template<typename ValueType, std::size_t Rank> auto make_uniform_provider(ValueType value, shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto make_uniform_provider(ValueType value, Args... args);
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
@@ -510,11 +515,6 @@ public:
         return accumulate(shape(), 1, std::multiplies<int>());
     }
 
-    bool empty() const
-    {
-        return any_of(shape(), [] (auto s) { return s == 0; });
-    }
-
     auto shape() const
     {
         auto s = shape_t<Rank>();
@@ -524,6 +524,18 @@ public:
             s[n] = final[n] / jumps[n] - start[n] / jumps[n];
         }
         return s;
+    }
+
+    bool empty() const
+    {
+        return any_of(shape(), [] (auto s) { return s == 0; });
+    }
+
+    bool contiguous() const
+    {
+        return
+        start == make_uniform_index<Rank>(0) &&
+        jumps == make_uniform_jumps<Rank>(1);
     }
 
     bool operator==(const access_pattern_t& other) const
@@ -641,6 +653,26 @@ public:
         return make_array(evaluate_as_unique(provider, accessor).shared());
     }
 
+    template<std::size_t NewRank>
+    auto reshape(shape_t<NewRank> new_shape) const
+    {
+        if (! accessor.contiguous())
+        {
+            throw std::logic_error("cannot reshape array with non-contiguous access pattern");
+        }
+        if (new_shape.size() != provider.size())
+        {
+            throw std::logic_error("cannot reshape array to a different size");
+        }
+        return make_array(provider.reshape(new_shape), make_access_pattern(new_shape));
+    }
+
+    template<typename... Args>
+    auto reshape(Args... args) const
+    {
+        return reshape(make_shape(args...));
+    }
+
 private:
     //=========================================================================
     Provider provider;
@@ -668,6 +700,31 @@ public:
 private:
     //=========================================================================
     shape_t<Rank> the_shape;
+};
+
+
+
+
+//=============================================================================
+template<std::size_t Rank, typename ValueType>
+class nd::uniform_provider_t
+{
+public:
+
+    using value_type = ValueType;
+    static constexpr std::size_t rank = Rank;
+
+    //=========================================================================
+    uniform_provider_t(shape_t<Rank> the_shape, ValueType the_value) : the_shape(the_shape), the_value(the_value) {}
+    const ValueType& operator()(const index_t<Rank>&) const { return the_value; }
+    auto shape() const { return the_shape; }
+    auto size() { return the_shape.size(); }
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return uniform_provider_t<NewRank, ValueType>(new_shape, the_value); }
+
+private:
+    //=========================================================================
+    shape_t<Rank> the_shape;
+    ValueType the_value;
 };
 
 
@@ -984,10 +1041,28 @@ auto nd::make_access_pattern(Args... args)
     return access_pattern_t<sizeof...(Args)>().with_final(args...);
 }
 
+template<std::size_t Rank>
+auto nd::make_index_provider(shape_t<Rank> shape)
+{
+    return index_provider_t<Rank>(shape);
+}
+
 template<typename... Args>
 auto nd::make_index_provider(Args... args)
 {
-    return index_provider_t<sizeof...(Args)>(make_shape(args...));
+    return make_index_provider(make_shape(args...));
+}
+
+template<typename ValueType, std::size_t Rank>
+auto nd::make_uniform_provider(ValueType value, shape_t<Rank> shape)
+{
+    return uniform_provider_t<Rank, ValueType>(shape, value);
+}
+
+template<typename ValueType, typename... Args>
+auto nd::make_uniform_provider(ValueType value, Args... args)
+{
+    return make_uniform_provider(value, make_shape(args...));
 }
 
 template<typename ValueType, std::size_t Rank>
