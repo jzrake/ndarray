@@ -317,7 +317,11 @@ TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider] [res
 
 TEST_CASE("arrays can be reshaped given a reshapable provider", "[unique_provider] [reshape]")
 {
+	using nd::reshape;
+
 	auto A = nd::make_array(nd::make_unique_provider<double>(10, 10));
-	REQUIRE_NOTHROW(A.reshape(2, 50));
-	REQUIRE_THROWS(A.reshape(2, 51));
+	REQUIRE_NOTHROW(A|reshape(2, 50));
+	REQUIRE_THROWS(A|reshape(2, 51));
+
+	// A.select(nd::make_access_pattern(10, 10, 10).with_start(2, 2, 2).with_jumps(2, 2, 2));
 }

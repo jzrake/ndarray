@@ -43,23 +43,7 @@ namespace nd
     template<typename ValueType> class buffer_t;
 
 
-    // provider types
-    //=========================================================================
-    template<std::size_t Rank> class index_provider_t;
-    template<std::size_t Rank, typename ValueType> class uniform_provider_t;
-    template<std::size_t Rank, typename ValueType> class shared_provider_t;
-    template<std::size_t Rank, typename ValueType> class unique_provider_t;
-    template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
-
-
-    // algorithm support structs
-    //=========================================================================
-    template<typename ValueType> class range_container_t;
-    template<typename ValueType, typename ContainerTuple> class zipped_container_t;
-    template<typename ContainerType, typename Function> class transformed_container_t;
-
-
-    // access pattern factory functions
+    // array and access pattern factory functions
     //=========================================================================
     template<typename... Args> auto make_shape(Args... args);
     template<typename... Args> auto make_index(Args... args);
@@ -70,6 +54,17 @@ namespace nd
     template<std::size_t Rank> auto make_strides_row_major(shape_t<Rank> shape);
     template<std::size_t Rank> auto make_access_pattern(shape_t<Rank> shape);
     template<typename... Args> auto make_access_pattern(Args... args);
+    template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
+    template<typename Provider> auto make_array(Provider&&);
+
+
+    // provider types
+    //=========================================================================
+    template<std::size_t Rank> class index_provider_t;
+    template<std::size_t Rank, typename ValueType> class uniform_provider_t;
+    template<std::size_t Rank, typename ValueType> class shared_provider_t;
+    template<std::size_t Rank, typename ValueType> class unique_provider_t;
+    template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
 
 
     // provider factory functions
@@ -90,10 +85,24 @@ namespace nd
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
-    // array factory functions
+    // array operator support structs
     //=========================================================================
-    template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
-    template<typename Provider> auto make_array(Provider&&);
+    template<std::size_t Rank> class op_reshape_t;
+
+
+    // array operator factory functions
+    //=========================================================================
+    auto shared();
+    auto unique();
+    template<std::size_t Rank> auto reshape(shape_t<Rank> shape);
+    template<typename... Args> auto reshape(Args... args);
+
+
+    // algorithm support structs
+    //=========================================================================
+    template<typename ValueType> class range_container_t;
+    template<typename ValueType, typename ContainerTuple> class zipped_container_t;
+    template<typename ContainerType, typename Function> class transformed_container_t;
 
 
     // std::algorithm wrappers for ranges
@@ -611,6 +620,38 @@ public:
 
 
 //=============================================================================
+template<std::size_t Rank>
+class nd::op_reshape_t
+{
+public:
+    op_reshape_t(shape_t<Rank> new_shape) : new_shape(new_shape) {}
+
+    template<typename Array>
+    auto operator()(Array&& array) const
+    {
+        const auto& provider = array.get_provider();
+        const auto& accessor = array.get_accessor();
+
+        if (! accessor.contiguous())
+        {
+            throw std::logic_error("cannot reshape array with non-contiguous access pattern");
+        }
+        if (new_shape.size() != provider.size())
+        {
+            throw std::logic_error("cannot reshape array to a different size");
+        }
+        return make_array(provider.reshape(new_shape), make_access_pattern(new_shape));
+    }
+
+private:
+    //=========================================================================
+    shape_t<Rank> new_shape;
+};
+
+
+
+
+//=============================================================================
 template<std::size_t Rank, typename Provider>
 class nd::array_t
 {
@@ -629,49 +670,26 @@ public:
     {
     }
 
+    // indexing functions
+    //=========================================================================
     template<typename... Args> decltype(auto) operator()(Args... args) const { return provider(accessor.map_index(make_index(args...))); }
     template<typename... Args> decltype(auto) operator()(Args... args)       { return provider(accessor.map_index(make_index(args...))); }
-
     decltype(auto) operator()(const index_t<Rank>& index) const { return provider(accessor.map_index(index)); }
     decltype(auto) operator()(const index_t<Rank>& index)       { return provider(accessor.map_index(index)); }
 
+    // query functions and operator support
+    //=========================================================================
     auto shape() const { return provider.shape(); }
     auto size() const { return provider.size(); }
+    const Provider& get_provider() const { return provider; }
+    const Accessor& get_accessor() const { return accessor; }
+    template<typename Function> auto operator|(Function&& fn) const & { return fn(*this); }
+    template<typename Function> auto operator|(Function&& fn)      && { return fn(std::move(*this)); }
 
-    const Provider& get_provider() const
-    {
-        return provider;
-    }
-
-    auto unique() const
-    {
-        return make_array(evaluate_as_unique(provider, accessor));
-    }
-
-    auto shared() const
-    {
-        return make_array(evaluate_as_unique(provider, accessor).shared());
-    }
-
-    template<std::size_t NewRank>
-    auto reshape(shape_t<NewRank> new_shape) const
-    {
-        if (! accessor.contiguous())
-        {
-            throw std::logic_error("cannot reshape array with non-contiguous access pattern");
-        }
-        if (new_shape.size() != provider.size())
-        {
-            throw std::logic_error("cannot reshape array to a different size");
-        }
-        return make_array(provider.reshape(new_shape), make_access_pattern(new_shape));
-    }
-
-    template<typename... Args>
-    auto reshape(Args... args) const
-    {
-        return reshape(make_shape(args...));
-    }
+    // methods converting this to a memory-backed array
+    //=========================================================================
+    auto unique() const { return make_array(evaluate_as_unique(provider, accessor)); }
+    auto shared() const { return make_array(evaluate_as_shared(provider, accessor)); }
 
 private:
     //=========================================================================
@@ -1041,6 +1059,10 @@ auto nd::make_access_pattern(Args... args)
     return access_pattern_t<sizeof...(Args)>().with_final(args...);
 }
 
+
+
+
+//=============================================================================
 template<std::size_t Rank>
 auto nd::make_index_provider(shape_t<Rank> shape)
 {
@@ -1153,4 +1175,36 @@ auto nd::zip_arrays(ArrayTypes&&... arrays)
         throw std::logic_error("cannot zip arrays with different shapes");
     }
     return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
+}
+
+
+
+
+//=============================================================================
+auto nd::shared()
+{
+    return [] (auto&& array)
+    {
+        return make_array(evaluate_as_unique(array.get_provider(), array.get_accessor()));
+    };
+}
+
+auto nd::unique()
+{
+    return [] (auto&& array)
+    {
+        return make_array(evaluate_as_shared(array.get_provider(), array.get_accessor()));
+    };
+}
+
+template<std::size_t Rank>
+auto nd::reshape(shape_t<Rank> shape)
+{
+    return op_reshape_t<Rank>(shape);
+}
+
+template<typename... Args>
+auto nd::reshape(Args... args)
+{
+    return reshape(make_shape(args...));
 }
