@@ -4,9 +4,10 @@
 
 
 
+//=============================================================================
 struct test_t
 {
-	int thing() const&
+	int thing() const &
 	{
 		return 1;
 	}
@@ -20,11 +21,45 @@ struct test_t
 
 
 //=============================================================================
+template<typename... Args>
+bool all_equal(Args... args)
+{
+	auto a = {args...};
+	return std::adjacent_find(std::begin(a), std::end(a), std::not_equal_to<>()) == std::end(a);
+}
+
+template<typename Function, typename... Args>
+bool all_equal_transformed(Function&& fn, Args... args)
+{
+	auto a = {fn(args)...};
+	return std::adjacent_find(std::begin(a), std::end(a), std::not_equal_to<>()) == std::end(a);
+}
+
+
+
+
+//=============================================================================
 TEST_CASE("rvalue-reference method works as expected")
 {
 	auto t = test_t();
 	REQUIRE(t.thing() == 1);
 	REQUIRE(std::move(t).thing() == 2);
+}
+
+TEST_CASE("all_equal works correctly")
+{
+	auto fac = [] (int n, int m) { return nd::make_array(nd::make_unique_provider<double>(n, m)); };
+	REQUIRE(all_equal(1));
+	REQUIRE(all_equal(1, 1));
+	REQUIRE(all_equal(1, 1, 1));
+	REQUIRE_FALSE(all_equal(1, 2));
+	REQUIRE_FALSE(all_equal(1, 2, 3));
+	REQUIRE(all_equal_transformed([] (auto) {return 0;}, 1, 2, 3));
+	REQUIRE_FALSE(all_equal_transformed([] (auto i) {return i * 2;}, 1, 2, 3));
+	REQUIRE(all_equal_transformed([] (auto c) {return c.size();}, fac(10, 10), fac(10, 10)));
+	REQUIRE(all_equal_transformed([] (auto c) {return c.shape();}, fac(10, 10), fac(10, 10)));
+	REQUIRE_FALSE(all_equal_transformed([] (auto c) {return c.size();}, fac(10, 10), fac(5, 5)));
+	REQUIRE_FALSE(all_equal_transformed([] (auto c) {return c.shape();}, fac(10, 10), fac(5, 5)));
 }
 
 TEST_CASE("shapes can be constructed", "[shape]")
@@ -232,4 +267,13 @@ TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider
 TEST_CASE("buffered array can be created from unbuffered array")
 {
 	auto A = nd::evaluate_as_unique(nd::make_index_provider(10));
+}
+
+TEST_CASE("zipped provider can be constructed")
+{
+	auto fac = [] (int n, int m) { return nd::make_array(nd::make_unique_provider<double>(n, m)); };
+	auto zipped = nd::zip_arrays(fac(10, 10), fac(10, 10));
+
+	auto p = nd::make_unique_provider<double>(10, 10);
+	REQUIRE(zipped(nd::make_index(0, 0)) == std::make_tuple(0, 0));
 }

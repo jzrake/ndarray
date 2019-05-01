@@ -40,10 +40,15 @@ namespace nd
     template<std::size_t Rank> class jumps_t;
     template<std::size_t Rank> class memory_strides_t;
     template<std::size_t Rank> class access_pattern_t;
+    template<typename ValueType> class buffer_t;
+
+
+    // provider types
+    //=========================================================================
     template<std::size_t Rank> class index_provider_t;
     template<std::size_t Rank, typename ValueType> class shared_provider_t;
     template<std::size_t Rank, typename ValueType> class unique_provider_t;
-    template<typename ValueType> class buffer_t;
+    template<std::size_t Rank, typename ValueType, typename ArrayTuple> class zipped_provider_t;
 
 
     // algorithm support structs
@@ -75,6 +80,7 @@ namespace nd
     template<typename ValueType, typename... Args> auto make_unique_provider(Args... args);
     template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
     template<typename Provider> auto evaluate_as_unique(Provider&&);
+    template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
     // array factory functions
@@ -148,6 +154,7 @@ template<typename ValueType, typename ContainerTuple>
 class nd::zipped_container_t
 {
 public:
+
     using value_type = ValueType;
 
     //=========================================================================
@@ -467,8 +474,8 @@ class nd::access_pattern_t
 {
 public:
 
-    static constexpr std::size_t rank = Rank;
     using value_type = index_t<Rank>;
+    static constexpr std::size_t rank = Rank;
 
     //=========================================================================
     struct iterator
@@ -600,6 +607,7 @@ public:
     using provider_type = Provider;
     using accessor_type = Accessor;
     using value_type = typename Provider::value_type;
+    static constexpr std::size_t rank = Rank;
 
     //=========================================================================
     array_t(Provider&& provider, Accessor&& accessor)
@@ -608,17 +616,11 @@ public:
     {
     }
 
-    template<typename... Args>
-    decltype(auto) operator()(Args... args) const
-    {
-        return provider(accessor.map_index(make_index(args...)));
-    }
+    template<typename... Args> decltype(auto) operator()(Args... args) const { return provider(accessor.map_index(make_index(args...))); }
+    template<typename... Args> decltype(auto) operator()(Args... args)       { return provider(accessor.map_index(make_index(args...))); }
 
-    template<typename... Args>
-    decltype(auto) operator()(Args... args)
-    {
-        return provider(accessor.map_index(make_index(args...)));
-    }
+    decltype(auto) operator()(const index_t<Rank>& index) const { return provider(accessor.map_index(index)); }
+    decltype(auto) operator()(const index_t<Rank>& index)       { return provider(accessor.map_index(index)); }
 
     auto shape() const { return provider.shape(); }
     auto size() const { return provider.size(); }
@@ -778,6 +780,46 @@ private:
 
 
 //=============================================================================
+template<std::size_t Rank, typename ValueType, typename ArrayTuple>
+class nd::zipped_provider_t
+{
+public:
+
+    using value_type = ValueType;
+    static constexpr std::size_t rank = Rank;
+
+    //=========================================================================
+    zipped_provider_t(shape_t<Rank> the_shape, ArrayTuple&& arrays)
+    : the_shape(the_shape)
+    , arrays(std::move(arrays))
+    {
+    }
+    auto operator()(const index_t<Rank>& index) const { return transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
+    auto shape() const { return the_shape; }
+    auto size() { return the_shape.size(); }
+
+private:
+    //=========================================================================
+    template<typename Function, typename Tuple, std::size_t... Is>
+    static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
+    {
+        return std::make_tuple(fn(std::get<Is>(t))...);
+    }
+
+    template<typename Function, typename Tuple>
+    static auto transform_tuple(Function&& fn, const Tuple& t)
+    {
+        return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
+    }
+
+    shape_t<Rank> the_shape;
+    ArrayTuple arrays;
+};
+
+
+
+
+//=============================================================================
 template<typename ValueType>
 class nd::buffer_t
 {
@@ -788,12 +830,10 @@ public:
     //=========================================================================
     buffer_t() {}
 
-    ~buffer_t() { delete [] memory; }
-
     buffer_t(const buffer_t& other)
     {
+        memory = new ValueType[other.count];
         count = other.count;
-        memory = new ValueType[count];
 
         for (std::size_t n = 0; n < count; ++n)
         {
@@ -803,13 +843,13 @@ public:
 
     buffer_t(buffer_t&& other)
     {
-        delete [] memory;
         memory = other.memory;
         count = other.count;
-
         other.memory = nullptr;
         other.count = 0;
     }
+
+    ~buffer_t() { delete [] memory; }
 
     explicit buffer_t(std::size_t count, const ValueType& value = ValueType())
     : count(count)
@@ -1039,3 +1079,14 @@ auto nd::evaluate_as_unique(Provider&& provider)
 {
     return evaluate_as_unique(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
 }
+
+template<typename... ArrayTypes>
+auto nd::zip_arrays(ArrayTypes&&... arrays)
+{
+    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::forward_as_tuple(arrays...)))>::rank;
+    using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
+    using ArrayTuple = std::tuple<ArrayTypes...>;
+    auto shape = std::get<0>(std::forward_as_tuple(arrays...)).shape();
+    return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
+}
+
