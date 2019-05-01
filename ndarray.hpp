@@ -1048,6 +1048,8 @@ public:
     using value_type = typename std::remove_reference_t<ArrayToPatch>::value_type;
     static constexpr std::size_t rank = std::remove_reference_t<ArrayToPatch>::rank;
 
+
+    //=========================================================================
     replace_provider_t(
         access_pattern_t<rank> patched_region,
         ArrayToPatch&& array_to_patch,
@@ -1069,6 +1071,7 @@ public:
     auto size() const { return array_to_patch.size(); }
 
 private:
+    //=========================================================================
     access_pattern_t<rank> patched_region;
     ArrayToPatch array_to_patch;
     ReplacementArray replacement_array;
