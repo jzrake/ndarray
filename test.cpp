@@ -316,17 +316,12 @@ TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider
     }
 }
 
-TEST_CASE("zipped provider can be constructed", "[zipped_provider] [make_zipped_provider]")
+TEST_CASE("can zip arrays together", "[zip_arrays]")
 {
-    auto fac = [] (int n, int m) { return nd::make_array(nd::make_shared_provider<double>(n, m)); };
-    auto zipped = nd::make_zipped_provider(fac(10, 10), fac(10, 10));
-
-    REQUIRE(zipped(nd::make_index(0, 0)) == std::make_tuple(0, 0));
-
-    SECTION("make_zipped_provider throws if the arrays have diferent shapes")
-    {
-        REQUIRE_THROWS(nd::make_zipped_provider(fac(10, 10), fac(9, 9)));
-    }
+    auto A = nd::shared_array<double>(10, 10);
+    auto B = nd::shared_array<int>(10, 10);
+    auto AB = nd::zip_arrays(A, B);
+    REQUIRE(AB(0, 0) == std::make_tuple(0.0, 0));
 }
 
 TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider] [reshape]")
@@ -355,19 +350,6 @@ TEST_CASE("arrays can be reshaped given a reshapable provider", "[unique_provide
     auto A = nd::make_array(nd::make_unique_provider<double>(10, 10));
     REQUIRE_NOTHROW(A | nd::reshape(2, 50));
     REQUIRE_THROWS(A | nd::reshape(2, 51));
-}
-
-TEST_CASE("switch provider can be constructed", "[switch_provider]")
-{
-    auto A1 = nd::make_array(nd::make_uniform_provider(1.0, 10, 10));
-    auto A2 = nd::make_array(nd::make_uniform_provider(2.0, 10, 10));
-    auto predicate = [] (auto index) { return index[0] < 5; };
-    auto provider = nd::make_switch_provider(A1, A2, predicate);
-    REQUIRE(provider(nd::make_index(4, 0)) == 1.0);
-    REQUIRE(provider(nd::make_index(5, 0)) == 2.0);
-    REQUIRE_THROWS(nd::make_switch_provider(
-        nd::index_array(10),
-        nd::index_array(9), predicate));
 }
 
 TEST_CASE("replace operator works as expected", "[replace]")
@@ -468,7 +450,7 @@ TEST_CASE("transform operator works as expected", "[transform]")
     SECTION("with unique provider")
     {
         auto C1 = nd::unique_array<double>(10);
-        auto C2 = C1 | nd::transform([] (auto) { return 2.0; });
+        auto C2 = C1.shared() | nd::transform([] (auto) { return 2.0; });
 
         for (auto index : C2.get_accessor())
         {
