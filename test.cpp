@@ -242,7 +242,7 @@ TEST_CASE("can create strides", "[memory_strides]")
 
 TEST_CASE("array can be constructed with an index provider", "[array] [index_provider]")
 {
-    auto A = nd::make_array(nd::make_index_provider(10));
+    auto A = nd::index_array(10);
     REQUIRE(A(5) == nd::make_index(5));
 }
 
@@ -316,12 +316,6 @@ TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider
     }
 }
 
-TEST_CASE("shared and unique providers can be built from a function provider", "[evaluate_as_unique] [evaluate_as_shared")
-{
-    auto A = nd::evaluate_as_unique(nd::make_index_provider(10));
-    auto B = nd::evaluate_as_shared(nd::make_index_provider(10));
-}
-
 TEST_CASE("zipped provider can be constructed", "[zipped_provider] [make_zipped_provider]")
 {
     auto fac = [] (int n, int m) { return nd::make_array(nd::make_shared_provider<double>(n, m)); };
@@ -372,16 +366,16 @@ TEST_CASE("switch provider can be constructed", "[switch_provider]")
     REQUIRE(provider(nd::make_index(4, 0)) == 1.0);
     REQUIRE(provider(nd::make_index(5, 0)) == 2.0);
     REQUIRE_THROWS(nd::make_switch_provider(
-        nd::make_array(nd::make_index_provider(10)),
-        nd::make_array(nd::make_index_provider(9)), predicate));
+        nd::index_array(10),
+        nd::index_array(9), predicate));
 }
 
-TEST_CASE("replace operator works as expected", "[op_replace]")
+TEST_CASE("replace operator works as expected", "[replace]")
 {
     SECTION("trying to replace a region with an array of the wrong size throws")
     {
-        auto A1 = nd::make_array(nd::make_index_provider(10));
-        auto A2 = nd::make_array(nd::make_index_provider(5));
+        auto A1 = nd::index_array(10);
+        auto A2 = nd::index_array(5);
         auto patch1 = nd::make_access_pattern(10).with_start(5);
         auto patch2 = nd::make_access_pattern(10).with_start(6);
         REQUIRE_NOTHROW(nd::replace(patch1, A2));
@@ -425,8 +419,8 @@ TEST_CASE("replace operator works as expected", "[op_replace]")
     }
     SECTION("replacing the second half of an array with linear values works")
     {
-        auto A1 = nd::make_array(nd::make_index_provider(10));
-        auto A2 = nd::make_array(nd::make_index_provider(5));
+        auto A1 = nd::index_array(10);
+        auto A2 = nd::index_array(5);
         auto patch = nd::make_access_pattern(10).with_start(5);
         auto A3 = A1 | nd::replace(patch, A2);
 
@@ -437,8 +431,8 @@ TEST_CASE("replace operator works as expected", "[op_replace]")
     }
     SECTION("replacing every other value works")
     {
-        auto A1 = nd::make_array(nd::make_index_provider(10));
-        auto A2 = nd::make_array(nd::make_index_provider(5));
+        auto A1 = nd::index_array(10);
+        auto A2 = nd::index_array(5);
         auto patch = nd::make_access_pattern(10).with_start(0).with_jumps(2);
         auto A3 = A1 | nd::replace(patch, A2);
 
@@ -449,7 +443,7 @@ TEST_CASE("replace operator works as expected", "[op_replace]")
     }
 }
 
-TEST_CASE("transform operator works as expected", "[op_transform]")
+TEST_CASE("transform operator works as expected", "[transform]")
 {
     SECTION("with index provider")
     {
@@ -483,15 +477,27 @@ TEST_CASE("transform operator works as expected", "[op_transform]")
     }
 }
 
-TEST_CASE("select operator works as expected", "[op_select]")
+TEST_CASE("select operator works as expected", "[select]")
 {
-    auto A1 = nd::index_array(10);
-    auto A2 = A1 | nd::select(nd::make_access_pattern(5));
-    auto A3 = A1 | nd::select(nd::make_access_pattern(10).with_start(5));
-    REQUIRE(A2.shape() == nd::make_shape(5));
-    REQUIRE(A3.shape() == nd::make_shape(5));
-    REQUIRE(A2(0) == nd::make_index(0));
-    REQUIRE(A3(0) == nd::make_index(5));
-    REQUIRE_NOTHROW(A1 | nd::select(nd::make_access_pattern(10)));
-    REQUIRE_THROWS(A1 | nd::select(nd::make_access_pattern(11)));
+    SECTION("with index array")
+    {
+        auto A1 = nd::index_array(10);
+        auto A2 = A1 | nd::select(nd::make_access_pattern(5));
+        auto A3 = A1 | nd::select(nd::make_access_pattern(10).with_start(5));
+        REQUIRE(A2.shape() == nd::make_shape(5));
+        REQUIRE(A3.shape() == nd::make_shape(5));
+        REQUIRE(A2(0) == nd::make_index(0));
+        REQUIRE(A3(0) == nd::make_index(5));
+        REQUIRE_NOTHROW(A1 | nd::select(nd::make_access_pattern(10)));
+        REQUIRE_THROWS(A1 | nd::select(nd::make_access_pattern(11)));
+    }
+    SECTION("with shared array")
+    {
+        auto A1 = nd::unique_array<double>(10, 10);
+        auto A2 = A1.shared() | nd::select(nd::make_access_pattern(5, 5));
+        A1(0, 0) = 1.0;
+        REQUIRE(A1(0, 0) == 1.0);
+        REQUIRE(A2(0, 0) == 0.0);
+        REQUIRE(A2.shape() == nd::make_shape(5, 5));
+    }
 }
