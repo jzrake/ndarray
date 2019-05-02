@@ -140,16 +140,16 @@ namespace nd
     namespace detail
     {
         template<typename Function, typename Tuple, std::size_t... Is>
-        static auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
-        {
-            return std::make_tuple(fn(std::get<Is>(t))...);
-        }
+        auto transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>);
 
         template<typename Function, typename Tuple>
-        static auto transform_tuple(Function&& fn, const Tuple& t)
-        {
-            return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
-        }
+        auto transform_tuple(Function&& fn, const Tuple& t);
+
+        template<typename ResultSequence, typename SourceSequence, typename IndexContainer>
+        auto remove_elements(const SourceSequence& source, IndexContainer indexes);
+
+        template<typename ResultSequence, typename SourceSequence, typename IndexContainer, typename Sequence>
+        auto insert_elements(const SourceSequence& source, IndexContainer indexes, Sequence values);
     }
 }
 
@@ -290,9 +290,8 @@ public:
     //=========================================================================
     transformed_container_t(const ContainerType& container, const Function& function)
     : container(container)
-    , function(function)
-    {
-    }
+    , function(function) {}
+
     auto begin() const { return iterator<decltype(container.begin())> {container.begin(), function}; }
     auto end() const { return iterator<decltype(container.end())> {container.end(), function}; }
 
@@ -415,7 +414,7 @@ public:
         return any_of(zip(*this, other), [] (const auto& t) { return std::get<0>(t) != std::get<1>(t); });
     }
 
-    std::size_t size() const { return accumulate(*this, 1, std::multiplies<>()); }
+    constexpr std::size_t size() const { return Rank; }
     const ValueType* data() const { return memory; }
     const ValueType* begin() const { return memory; }
     const ValueType* end() const { return memory + Rank; }
@@ -440,6 +439,8 @@ class nd::shape_t : public nd::short_sequence_t<Rank, std::size_t, shape_t<Rank>
 public:
     using short_sequence_t<Rank, std::size_t, shape_t<Rank>>::short_sequence_t;
 
+    std::size_t volume() const { return accumulate(*this, 1, std::multiplies<>()); }
+
     bool contains(const index_t<Rank>& index) const
     {
         return all_of(zip(index, *this), [] (const auto& t) { return std::get<0>(t) < std::get<1>(t); });
@@ -449,6 +450,18 @@ public:
     bool contains(Args... args) const
     {
         return contains(make_index(args...));
+    }
+
+    template<typename IndexContainer>
+    auto remove_elements(IndexContainer indexes) const
+    {
+        return detail::remove_elements<shape_t<Rank - indexes.size()>>(*this, indexes);
+    }
+
+    template<typename IndexContainer, typename Sequence>
+    auto insert_elements(IndexContainer indexes, Sequence values) const
+    {
+        return detail::insert_elements<shape_t<Rank + indexes.size()>>(*this, indexes, values);
     }
 };
 
@@ -461,6 +474,18 @@ class nd::index_t : public nd::short_sequence_t<Rank, std::size_t, index_t<Rank>
 {
 public:
     using short_sequence_t<Rank, std::size_t, index_t<Rank>>::short_sequence_t;
+
+    template<typename IndexContainer>
+    auto remove_elements(IndexContainer indexes) const
+    {
+        return detail::remove_elements<index_t<Rank - indexes.size()>>(*this, indexes);
+    }
+
+    template<typename IndexContainer, typename Sequence>
+    auto insert_elements(IndexContainer indexes, Sequence values) const
+    {
+        return detail::insert_elements<index_t<Rank + indexes.size()>>(*this, indexes, values);
+    }
 };
 
 
@@ -472,6 +497,18 @@ class nd::jumps_t : public nd::short_sequence_t<Rank, long, jumps_t<Rank>>
 {
 public:
     using short_sequence_t<Rank, long, jumps_t<Rank>>::short_sequence_t;
+
+    template<typename IndexContainer>
+    auto remove_elements(IndexContainer indexes) const
+    {
+        return detail::remove_elements<jumps_t<Rank - indexes.size()>>(*this, indexes);
+    }
+
+    template<typename IndexContainer, typename Sequence>
+    auto insert_elements(IndexContainer indexes, Sequence values) const
+    {
+        return detail::insert_elements<jumps_t<Rank + indexes.size()>>(*this, indexes, values);
+    }
 };
 
 
@@ -538,7 +575,7 @@ public:
 
     std::size_t size() const
     {
-        return accumulate(shape(), 1, std::multiplies<int>());
+        return shape().volume();
     }
 
     auto shape() const
@@ -691,7 +728,7 @@ public:
         {
             throw std::logic_error("cannot reshape array with non-contiguous access pattern");
         }
-        if (new_shape.size() != provider.size())
+        if (new_shape.volume() != provider.size())
         {
             throw std::logic_error("cannot reshape array to a different size");
         }
@@ -832,7 +869,7 @@ public:
         return index;
     }
     auto shape() const { return the_shape; }
-    auto size() { return the_shape.size(); }
+    auto size() { return the_shape.volume(); }
 
 private:
     //=========================================================================
@@ -855,7 +892,7 @@ public:
     uniform_provider_t(shape_t<Rank> the_shape, ValueType the_value) : the_shape(the_shape), the_value(the_value) {}
     const ValueType& operator()(const index_t<Rank>&) const { return the_value; }
     auto shape() const { return the_shape; }
-    auto size() { return the_shape.size(); }
+    auto size() { return the_shape.volume(); }
     template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return uniform_provider_t<NewRank, ValueType>(new_shape, the_value); }
 
 private:
@@ -882,7 +919,7 @@ public:
     , strides(make_strides_row_major(the_shape))
     , buffer(buffer)
     {
-        if (the_shape.size() != buffer->size())
+        if (the_shape.volume() != buffer->size())
         {
             throw std::logic_error("shape and buffer sizes do not match");
         }
@@ -894,7 +931,7 @@ public:
     }
 
     auto shape() const { return the_shape; }
-    auto size() const { return the_shape.size(); }
+    auto size() const { return the_shape.volume(); }
     const ValueType* data() const { return buffer->data(); }
 
     template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return shared_provider_t<NewRank, ValueType>(new_shape, buffer); }
@@ -924,7 +961,7 @@ public:
     , strides(make_strides_row_major(the_shape))
     , buffer(std::move(buffer))
     {
-        if (the_shape.size() != unique_provider_t::buffer.size())
+        if (the_shape.volume() != unique_provider_t::buffer.size())
         {
             throw std::logic_error("shape and buffer sizes do not match");
         }
@@ -936,7 +973,7 @@ public:
     template<typename... Args> /* */ ValueType& operator()(Args... args)       { return operator()(make_index(args...)); }
 
     auto shape() const { return the_shape; }
-    auto size() const { return the_shape.size(); }
+    auto size() const { return the_shape.volume(); }
     const ValueType* data() const { return buffer.data(); }
 
     auto shared() const & { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer.begin(), buffer.end())); }
@@ -971,7 +1008,7 @@ public:
 
     auto operator()(const index_t<Rank>& index) const { return detail::transform_tuple([index] (auto&& A) { return A(index); }, arrays); }
     auto shape() const { return the_shape; }
-    auto size() const { return the_shape.size(); }
+    auto size() const { return the_shape.volume(); }
 
 private:
     shape_t<Rank> the_shape;
@@ -1026,7 +1063,7 @@ public:
 
     auto operator()(const index_t<rank>& index) const { return predicate(index) ? array1(index) : array2(index); }
     auto shape() const { return the_shape; }
-    auto size() const { return the_shape.size(); }
+    auto size() const { return the_shape.volume(); }
 
 private:
     shape_t<rank> the_shape;
@@ -1306,7 +1343,7 @@ auto nd::make_uniform_provider(ValueType value, Args... args)
 template<typename ValueType, std::size_t Rank>
 auto nd::make_shared_provider(shape_t<Rank> shape)
 {
-    auto buffer = std::make_shared<buffer_t<ValueType>>(shape.size());
+    auto buffer = std::make_shared<buffer_t<ValueType>>(shape.volume());
     return shared_provider_t<Rank, ValueType>(shape, buffer);
 }
 
@@ -1319,7 +1356,7 @@ auto nd::make_shared_provider(Args... args)
 template<typename ValueType, std::size_t Rank>
 auto nd::make_unique_provider(shape_t<Rank> shape)
 {
-    auto buffer = buffer_t<ValueType>(shape.size());
+    auto buffer = buffer_t<ValueType>(shape.volume());
     return unique_provider_t<Rank, ValueType>(shape, std::move(buffer));
 }
 
@@ -1481,4 +1518,59 @@ template<typename Function>
 auto nd::transform(Function&& function)
 {
     return op_transform_t<Function>(std::forward<Function>(function));
+}
+
+
+
+
+//=============================================================================
+template<typename Function, typename Tuple, std::size_t... Is>
+auto nd::detail::transform_tuple_impl(Function&& fn, const Tuple& t, std::index_sequence<Is...>)
+{
+    return std::make_tuple(fn(std::get<Is>(t))...);
+}
+
+template<typename Function, typename Tuple>
+auto nd::detail::transform_tuple(Function&& fn, const Tuple& t)
+{
+    return transform_tuple_impl(fn, t, std::make_index_sequence<std::tuple_size<Tuple>::value>());
+}
+
+template<typename ResultSequence, typename SourceSequence, typename IndexContainer>
+auto nd::detail::remove_elements(const SourceSequence& source, IndexContainer indexes)
+{
+    auto target_n = std::size_t(0);
+    auto result = ResultSequence();
+
+    for (std::size_t n = 0; n < source.size(); ++n)
+    {
+        if (std::find(std::begin(indexes), std::end(indexes), n) == std::end(indexes))
+        {
+            result[target_n++] = source[n];
+        }
+    }
+    return result;
+}
+
+template<typename ResultSequence, typename SourceSequence, typename IndexContainer, typename Sequence>
+auto nd::detail::insert_elements(const SourceSequence& source, IndexContainer indexes, Sequence values)
+{
+    static_assert(indexes.size() == values.size());
+
+    auto source1_n = std::size_t(0);
+    auto source2_n = std::size_t(0);
+    auto result = ResultSequence();
+
+    for (std::size_t n = 0; n < result.size(); ++n)
+    {
+        if (std::find(std::begin(indexes), std::end(indexes), n) == std::end(indexes))
+        {
+            result[n] = source[source1_n++];
+        }
+        else
+        {
+            result[n] = values[source2_n++];
+        }
+    }
+    return result;
 }

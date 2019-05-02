@@ -38,7 +38,6 @@ bool all_equal_transformed(Function&& fn, Args&&... args)
 
 
 
-
 //=============================================================================
 TEST_CASE("rvalue-reference method works as expected")
 {
@@ -67,12 +66,26 @@ TEST_CASE("shapes can be constructed", "[shape]")
 {
     auto shape1 = nd::make_shape(10, 10, 10);
     auto shape2 = nd::make_shape(10, 10, 5);
+
     REQUIRE(shape1 != shape2);
     REQUIRE_FALSE(shape1 == shape2);
-    REQUIRE(shape1.size() == 1000);
+    REQUIRE(shape1.size() == 3);
+    REQUIRE(shape1.volume() == 1000);
     REQUIRE(shape1.contains(0, 0, 0));
     REQUIRE(shape1.contains(9, 9, 9));
     REQUIRE_FALSE(shape1.contains(10, 9, 9));
+}
+
+TEST_CASE("shapes support insertion and removal of elements")
+{
+    auto shape = nd::make_shape(0, 1, 2);
+    REQUIRE(shape.remove_elements(nd::make_index(0, 1)) == nd::make_shape(2));
+    REQUIRE(shape.remove_elements(nd::make_index(1, 2)) == nd::make_shape(0));
+    REQUIRE(shape.remove_elements(nd::make_index(0, 2)) == nd::make_shape(1));
+    REQUIRE(shape.insert_elements(nd::make_index(0, 1), nd::make_shape(8, 9)) == nd::make_shape(8, 9, 0, 1, 2));
+    REQUIRE(shape.insert_elements(nd::make_index(1, 2), nd::make_shape(8, 9)) == nd::make_shape(0, 8, 9, 1, 2));
+    REQUIRE(shape.insert_elements(nd::make_index(2, 3), nd::make_shape(8, 9)) == nd::make_shape(0, 1, 8, 9, 2));
+    REQUIRE(shape.insert_elements(nd::make_index(3, 4), nd::make_shape(8, 9)) == nd::make_shape(0, 1, 2, 8, 9));
 }
 
 TEST_CASE("can zip, transform, enumerate a range", "[range] [transform] [zip]")
@@ -190,7 +203,7 @@ TEST_CASE("access patterns work OK", "[access_pattern]")
     SECTION("can be iterated over")
     {
         auto pat = nd::make_access_pattern(5, 5);
-        REQUIRE(nd::distance(pat) == pat.size());
+        REQUIRE(nd::distance(pat) == long(pat.size()));
         REQUIRE(pat.contains(0, 0));
         REQUIRE_FALSE(pat.contains(0, 5));
         REQUIRE_FALSE(pat.contains(5, 0));
