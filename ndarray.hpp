@@ -1332,18 +1332,16 @@ auto nd::make_unique_provider(Args... args)
 template<typename... ArrayTypes>
 auto nd::make_zipped_provider(ArrayTypes&&... arrays)
 {
-    using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
+    using ValueType = std::tuple<typename ArrayTypes::value_type...>;
     using ArrayTuple = std::tuple<ArrayTypes...>;
-    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::make_tuple(arrays...)))>::rank;
-    auto shapes = {arrays.shape()...};
+    constexpr std::size_t Ranks[] = {ArrayTypes::rank...};
+    shape_t<Ranks[0]> shapes[] = {arrays.shape()...};
 
     if (std::adjacent_find(std::begin(shapes), std::end(shapes), std::not_equal_to<>()) != std::end(shapes))
     {
         throw std::logic_error("cannot zip arrays with different shapes");
     }
-    return zipped_provider_t<Rank, ValueType, ArrayTuple>(
-        std::get<0>(std::make_tuple(arrays...)).shape(),
-        std::forward_as_tuple(arrays...));
+    return zipped_provider_t<Ranks[0], ValueType, ArrayTuple>(shapes[0], std::forward_as_tuple(arrays...));
 }
 
 template<typename ArrayType, typename Function>
