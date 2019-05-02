@@ -492,4 +492,6 @@ TEST_CASE("select operator works as expected", "[op_select]")
     REQUIRE(A3.shape() == nd::make_shape(5));
     REQUIRE(A2(0) == nd::make_index(0));
     REQUIRE(A3(0) == nd::make_index(5));
+    REQUIRE_NOTHROW(A1 | nd::select(nd::make_access_pattern(10)));
+    REQUIRE_THROWS(A1 | nd::select(nd::make_access_pattern(11)));
 }

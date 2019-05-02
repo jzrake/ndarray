@@ -473,6 +473,17 @@ public:
     {
         return detail::insert_elements<shape_t<Rank + indexes.size()>>(*this, indexes, values);
     }
+
+    index_t<Rank> last_index() const
+    {
+        auto result = index_t<Rank>();
+
+        for (std::size_t n = 0; n < Rank; ++n)
+        {
+            result[n] = this->operator[](n);
+        }
+        return result;
+    }
 };
 
 
@@ -495,6 +506,23 @@ public:
     auto insert_elements(IndexContainer indexes, Sequence values) const
     {
         return detail::insert_elements<index_t<Rank + indexes.size()>>(*this, indexes, values);
+    }
+
+    bool operator<(const index_t<Rank>& other) const
+    {
+        return all_of(zip(*this, other), [] (const auto& t) { return std::get<0>(t) < std::get<1>(t); });
+    }
+    bool operator>(const index_t<Rank>& other) const
+    {
+        return all_of(zip(*this, other), [] (const auto& t) { return std::get<0>(t) > std::get<1>(t); });
+    }
+    bool operator<=(const index_t<Rank>& other) const
+    {
+        return all_of(zip(*this, other), [] (const auto& t) { return std::get<0>(t) <= std::get<1>(t); });
+    }
+    bool operator>=(const index_t<Rank>& other) const
+    {
+        return all_of(zip(*this, other), [] (const auto& t) { return std::get<0>(t) >= std::get<1>(t); });
     }
 };
 
@@ -709,6 +737,20 @@ public:
         return generates(make_index(args...));
     }
 
+    /**
+     * Return false if this access pattern would generate any indexes not
+     * contained in the given shape.
+     */
+    bool within(const shape_t<Rank>& parent_shape) const
+    {
+        auto zero = make_uniform_index<Rank>(0);
+        auto t1 = map_index(zero);
+        auto t2 = map_index(shape().last_index());
+
+        return (t1 >= zero && t1 <= parent_shape.last_index() &&
+                t2 >= zero && t2 <= parent_shape.last_index());
+    }
+
     iterator begin() const { return { *this, start }; }
     iterator end() const { return { *this, final }; }
 
@@ -733,10 +775,6 @@ public:
     {
         const auto& provider = array.get_provider();
 
-        // if (! accessor.contiguous())
-        // {
-        //     throw std::logic_error("cannot reshape array with non-contiguous access pattern");
-        // }
         if (new_shape.volume() != provider.size())
         {
             throw std::logic_error("cannot reshape array to a different size");
@@ -1152,7 +1190,13 @@ public:
     //=========================================================================
     select_provider_t(ArrayType&& provider, access_pattern_t<rank> accessor)
     : provider(provider)
-    , accessor(accessor) {}
+    , accessor(accessor)
+    {
+        if (! accessor.within(provider.shape()))
+        {
+            throw std::logic_error("out-of-bounds selection");
+        }
+    }
 
     decltype(auto) operator()(const index_t<rank>& index) const
     {
