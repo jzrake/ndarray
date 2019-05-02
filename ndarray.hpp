@@ -233,9 +233,7 @@ public:
     };
 
     //=========================================================================
-    zipped_container_t(ContainerTuple&& containers) : containers(std::move(containers))
-    {
-    }
+    zipped_container_t(ContainerTuple&& containers) : containers(containers) {}
 
     auto begin() const
     {
@@ -382,8 +380,8 @@ public:
         {
             throw std::logic_error("sequence constructed from range of wrong size");
         }
-
         DerivedType result;
+
         for (const auto& [n, a] : enumerate(rng))
         {
             result.memory[n] = a;
@@ -941,10 +939,10 @@ public:
     auto size() const { return the_shape.size(); }
     const ValueType* data() const { return buffer.data(); }
 
-    auto shared() const & { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer)); }
+    auto shared() const & { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(buffer.begin(), buffer.end())); }
     auto shared()      && { return shared_provider_t(the_shape, std::make_shared<buffer_t<ValueType>>(std::move(buffer))); }
 
-    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const & { return unique_provider_t<NewRank, ValueType>(new_shape, buffer_t(buffer)); }
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const & { return unique_provider_t<NewRank, ValueType>(new_shape, buffer_t<ValueType>(buffer.begin(), buffer.end())); }
     template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape)      && { return unique_provider_t<NewRank, ValueType>(new_shape, std::move(buffer)); }
 
 private:
@@ -1089,18 +1087,34 @@ public:
     using value_type = ValueType;
 
     //=========================================================================
+    ~buffer_t() { delete [] memory; }
     buffer_t() {}
+    buffer_t(const buffer_t& other) = delete;
+    buffer_t& operator=(const buffer_t& other) = delete;
 
-    buffer_t(const buffer_t& other)
-    {
-        memory = new ValueType[other.count];
-        count = other.count;
+    // buffer_t(const buffer_t& other)
+    // {
+    //     memory = new ValueType[other.count];
+    //     count = other.count;
 
-        for (std::size_t n = 0; n < count; ++n)
-        {
-            memory[n] = other.memory[n];
-        }
-    }
+    //     for (std::size_t n = 0; n < count; ++n)
+    //     {
+    //         memory[n] = other.memory[n];
+    //     }
+    // }
+
+    // buffer_t& operator=(const buffer_t& other)
+    // {
+    //     delete [] memory;
+    //     count = other.count;
+    //     memory = new ValueType[count];
+
+    //     for (std::size_t n = 0; n < count; ++n)
+    //     {
+    //         memory[n] = other.memory[n];
+    //     }
+    //     return *this;
+    // }
 
     buffer_t(buffer_t&& other)
     {
@@ -1110,9 +1124,7 @@ public:
         other.count = 0;
     }
 
-    ~buffer_t() { delete [] memory; }
-
-    explicit buffer_t(std::size_t count, const ValueType& value = ValueType())
+    buffer_t(std::size_t count, ValueType value=ValueType())
     : count(count)
     , memory(new ValueType[count])
     {
@@ -1124,26 +1136,12 @@ public:
 
     template<class IteratorType>
     buffer_t(IteratorType first, IteratorType last)
-    : count(std::distance(first, last))
-    , memory(new ValueType[count])
+    : count(std::distance(first, last)), memory(new ValueType[count])
     {
         for (std::size_t n = 0; n < count; ++n)
         {
             memory[n] = *first++;
         }
-    }
-
-    buffer_t& operator=(const buffer_t& other)
-    {
-        delete [] memory;
-        count = other.count;
-        memory = new ValueType[count];
-
-        for (std::size_t n = 0; n < count; ++n)
-        {
-            memory[n] = other.memory[n];
-        }
-        return *this;
     }
 
     buffer_t& operator=(buffer_t&& other)
@@ -1334,18 +1332,18 @@ auto nd::make_unique_provider(Args... args)
 template<typename... ArrayTypes>
 auto nd::make_zipped_provider(ArrayTypes&&... arrays)
 {
-    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::forward_as_tuple(arrays...)))>::rank;
     using ValueType = std::tuple<typename std::remove_reference_t<ArrayTypes>::value_type...>;
     using ArrayTuple = std::tuple<ArrayTypes...>;
-    auto shape = std::get<0>(std::forward_as_tuple(arrays...)).shape();
-
+    constexpr auto Rank = std::remove_reference_t<decltype(std::get<0>(std::make_tuple(arrays...)))>::rank;
     auto shapes = {arrays.shape()...};
 
     if (std::adjacent_find(std::begin(shapes), std::end(shapes), std::not_equal_to<>()) != std::end(shapes))
     {
         throw std::logic_error("cannot zip arrays with different shapes");
     }
-    return zipped_provider_t<Rank, ValueType, ArrayTuple>(shape, std::forward_as_tuple(arrays...));
+    return zipped_provider_t<Rank, ValueType, ArrayTuple>(
+        std::get<0>(std::make_tuple(arrays...)).shape(),
+        std::forward_as_tuple(arrays...));
 }
 
 template<typename ArrayType, typename Function>
@@ -1439,7 +1437,8 @@ template<typename... ArrayTypes>
 auto nd::zip_arrays(ArrayTypes&&... arrays)
 {
     auto provider = make_zipped_provider(std::forward<ArrayTypes>(arrays)...);
-    return make_array(std::move(provider), provider.shape());
+    auto shape = provider.shape();
+    return make_array(std::move(provider), shape);
 }
 
 

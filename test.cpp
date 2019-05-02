@@ -24,16 +24,17 @@ struct test_t
 template<typename... Args>
 bool all_equal(Args... args)
 {
-    auto a = {args...};
+    auto a = {std::forward<Args>(args)...};
     return std::adjacent_find(std::begin(a), std::end(a), std::not_equal_to<>()) == std::end(a);
 }
 
 template<typename Function, typename... Args>
-bool all_equal_transformed(Function&& fn, Args... args)
+bool all_equal_transformed(Function&& fn, Args&&... args)
 {
-    auto a = {fn(args)...};
+    auto a = {fn(std::forward<Args>(args))...};
     return std::adjacent_find(std::begin(a), std::end(a), std::not_equal_to<>()) == std::end(a);
 }
+
 
 
 
@@ -74,7 +75,7 @@ TEST_CASE("shapes can be constructed", "[shape]")
     REQUIRE_FALSE(shape1.contains(10, 9, 9));
 }
 
-TEST_CASE("can transform a range", "[transformed_container]")
+TEST_CASE("can zip, transform, enumerate a range", "[range] [transform] [zip]")
 {
     auto n = 0;
 
@@ -82,6 +83,14 @@ TEST_CASE("can transform a range", "[transformed_container]")
     {
         REQUIRE(a == 2 * n);
         ++n;
+    }
+    for (auto&& [m, n] : nd::zip(nd::range(10), nd::range(10)))
+    {
+        REQUIRE(m == n);
+    }
+    for (auto&& [m, n] : enumerate(nd::range(10)))
+    {
+        REQUIRE(m == n);
     }
 }
 
@@ -286,13 +295,13 @@ TEST_CASE("shared buffer provider can be constructed", "[array] [shared_provider
         auto A = nd::make_array(std::move(provider).shared());
         auto a = A;
         auto B = A.unique();
-        auto b = B;
+        // auto b = B; // cannot copy-construct B
         auto C = B.shared(); // cannot assign to C
         B(1, 2, 3) = 123;
         REQUIRE(A(1, 2, 3) != 123);
         REQUIRE(B(1, 2, 3) == 123);
         REQUIRE(a.get_provider().data() == A.get_provider().data());
-        REQUIRE(b.get_provider().data() != B.get_provider().data());
+        REQUIRE(A.get_provider().data() != B.get_provider().data());
     }
 }
 
@@ -304,7 +313,7 @@ TEST_CASE("shared and unique providers can be built from a function provider", "
 
 TEST_CASE("zipped provider can be constructed", "[zipped_provider] [make_zipped_provider]")
 {
-    auto fac = [] (int n, int m) { return nd::make_array(nd::make_unique_provider<double>(n, m)); };
+    auto fac = [] (int n, int m) { return nd::make_array(nd::make_shared_provider<double>(n, m)); };
     auto zipped = nd::make_zipped_provider(fac(10, 10), fac(10, 10));
 
     REQUIRE(zipped(nd::make_index(0, 0)) == std::make_tuple(0, 0));
@@ -338,13 +347,9 @@ TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider] [res
 
 TEST_CASE("arrays can be reshaped given a reshapable provider", "[unique_provider] [reshape]")
 {
-    using nd::reshape;
-
     auto A = nd::make_array(nd::make_unique_provider<double>(10, 10));
-    REQUIRE_NOTHROW(A|reshape(2, 50));
-    REQUIRE_THROWS(A|reshape(2, 51));
-
-    // A.select(nd::make_access_pattern(10, 10, 10).with_start(2, 2, 2).with_jumps(2, 2, 2));
+    REQUIRE_NOTHROW(A | nd::reshape(2, 50));
+    REQUIRE_THROWS(A | nd::reshape(2, 51));
 }
 
 TEST_CASE("switch provider can be constructed", "[switch_provider]")
@@ -435,11 +440,34 @@ TEST_CASE("replace operator works as expected", "[op_replace]")
 
 TEST_CASE("transform operator works as expected", "[op_transform]")
 {
-    auto A1 = nd::make_array(nd::make_index_provider(10));
-    auto A2 = A1 | nd::transform([] (auto i) { return i[0] * 2.0; });
-
-    for (auto index : A2.get_accessor())
+    SECTION("with index provider")
     {
-        REQUIRE(A2(index) == index[0] * 2.0);
+        auto A1 = nd::make_array(nd::make_index_provider(10));
+        auto A2 = A1 | nd::transform([] (auto i) { return i[0] * 2.0; });
+
+        for (auto index : A2.get_accessor())
+        {
+            REQUIRE(A2(index) == index[0] * 2.0);
+        }
+    }
+    SECTION("with shared provider")
+    {
+        auto B1 = nd::make_array(nd::make_shared_provider<double>(10));
+        auto B2 = B1 | nd::transform([] (auto) { return 2.0; });
+
+        for (auto index : B2.get_accessor())
+        {
+            REQUIRE(B2(index) == 2.0);
+        }
+    }
+    SECTION("with unique provider")
+    {
+        auto C1 = nd::make_array(nd::make_unique_provider<double>(10));
+        auto C2 = C1 | nd::transform([] (auto) { return 2.0; });
+
+        for (auto index : C2.get_accessor())
+        {
+            REQUIRE(C2(index) == 2.0);
+        }
     }
 }
