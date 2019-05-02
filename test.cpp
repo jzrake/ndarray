@@ -453,7 +453,7 @@ TEST_CASE("transform operator works as expected", "[op_transform]")
 {
     SECTION("with index provider")
     {
-        auto A1 = nd::make_array(nd::make_index_provider(10));
+        auto A1 = nd::index_array(10);
         auto A2 = A1 | nd::transform([] (auto i) { return i[0] * 2.0; });
 
         for (auto index : A2.get_accessor())
@@ -481,4 +481,15 @@ TEST_CASE("transform operator works as expected", "[op_transform]")
             REQUIRE(C2(index) == 2.0);
         }
     }
+}
+
+TEST_CASE("select operator works as expected", "[op_select]")
+{
+    auto A1 = nd::index_array(10);
+    auto A2 = A1 | nd::select(nd::make_access_pattern(5));
+    auto A3 = A1 | nd::select(nd::make_access_pattern(10).with_start(5));
+    REQUIRE(A2.shape() == nd::make_shape(5));
+    REQUIRE(A3.shape() == nd::make_shape(5));
+    REQUIRE(A2(0) == nd::make_index(0));
+    REQUIRE(A3(0) == nd::make_index(5));
 }

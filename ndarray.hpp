@@ -66,6 +66,8 @@ namespace nd
     template<typename ArrayType, typename Function> class transform_provider_t;
     template<typename ArrayT, typename ArrayF, typename Predicate> class switch_provider_t;
     template<typename ArrayToPatch, typename ReplacementArray> class replace_provider_t;
+    template<typename ArrayType> class select_provider_t;
+    // template<std::size_t ReductionInRank> class slice_provider_t;
 
 
     // provider factory functions
@@ -89,11 +91,12 @@ namespace nd
     template<std::size_t Rank, typename ArrayToPatch, typename ReplacementArray>
     auto make_replace_provider(access_pattern_t<Rank>, ArrayToPatch&&, ReplacementArray&&);
 
+    template<typename ArrayType, std::size_t Rank>
+    auto make_select_provider(ArrayType&& provider, access_pattern_t<Rank> accessor);
 
 
     // array factory functions
     //=========================================================================
-    // template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
     template<typename Provider> auto make_array(Provider&&);
     template<typename ValueType, std::size_t Rank> auto shared_array(shape_t<Rank> shape);
     template<typename ValueType, typename... Args> auto shared_array(Args... args);
@@ -101,7 +104,6 @@ namespace nd
     template<typename ValueType, typename... Args> auto unique_array(Args... args);
     template<std::size_t Rank> auto index_array(shape_t<Rank> shape);
     template<typename... Args> auto index_array(Args... args);
-
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
@@ -110,6 +112,8 @@ namespace nd
     template<std::size_t Rank> class op_reshape_t;
     template<typename ArrayType> class op_replace_t;
     template<typename Function> class op_transform_t;
+    template<std::size_t RanksOperatedOn> class op_select_t;
+    // template<std::size_t ReductionInRank> class op_slice_t;
 
 
     // array operator factory functions
@@ -119,6 +123,7 @@ namespace nd
     template<std::size_t Rank> auto reshape(shape_t<Rank> shape);
     template<typename... Args> auto reshape(Args... args);
     template<std::size_t Rank, typename ArrayType> auto replace(access_pattern_t<Rank>, ArrayType&&);
+    template<std::size_t Rank> auto select(access_pattern_t<Rank>);
     template<typename Function> auto transform(Function&& function);
 
 
@@ -805,6 +810,29 @@ private:
 
 
 //=============================================================================
+template<std::size_t Rank>
+class nd::op_select_t
+{
+public:
+
+    //=========================================================================
+    op_select_t(access_pattern_t<Rank> accessor) : accessor(accessor) {}
+
+    template<typename ArgumentArray>
+    auto operator()(ArgumentArray&& array) const
+    {
+        return make_array(make_select_provider(array, accessor));
+    }
+
+private:
+    //=========================================================================
+    access_pattern_t<Rank> accessor;
+};
+
+
+
+
+//=============================================================================
 template<std::size_t Rank, typename Provider>
 class nd::array_t
 {
@@ -1113,6 +1141,37 @@ private:
 
 
 //=============================================================================
+template<typename ArrayType>
+class nd::select_provider_t
+{
+public:
+
+    using value_type = typename std::remove_reference_t<ArrayType>::value_type;
+    static constexpr std::size_t rank = std::remove_reference_t<ArrayType>::rank;
+
+    //=========================================================================
+    select_provider_t(ArrayType&& provider, access_pattern_t<rank> accessor)
+    : provider(provider)
+    , accessor(accessor) {}
+
+    decltype(auto) operator()(const index_t<rank>& index) const
+    {
+        return provider(accessor.map_index(index));
+    }
+
+    auto shape() const { return accessor.shape(); }
+    auto size() const { return accessor.size(); }
+
+private:
+    //=========================================================================
+    ArrayType provider;
+    access_pattern_t<rank> accessor;
+};
+
+
+
+
+//=============================================================================
 template<typename ValueType>
 class nd::buffer_t
 {
@@ -1410,6 +1469,12 @@ auto nd::make_replace_provider(
         std::forward<ReplacementArray>(replacement_array));
 }
 
+template<typename ArrayType, std::size_t Rank>
+auto nd::make_select_provider(ArrayType&& provider, access_pattern_t<Rank> accessor)
+{
+    return select_provider_t<ArrayType>(provider, accessor);
+}
+
 template<typename Provider>
 auto nd::evaluate_as_unique(Provider&& source_provider)
 {
@@ -1521,6 +1586,12 @@ template<std::size_t Rank, typename ArrayType>
 auto nd::replace(access_pattern_t<Rank> region_to_replace, ArrayType&& replacement_array)
 {
     return op_replace_t<ArrayType>(region_to_replace, std::forward<ArrayType>(replacement_array));
+}
+
+template<std::size_t Rank>
+auto nd::select(access_pattern_t<Rank> accessor)
+{
+    return op_select_t<Rank>(accessor);
 }
 
 template<typename Function>
