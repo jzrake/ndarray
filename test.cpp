@@ -324,6 +324,16 @@ TEST_CASE("can zip arrays together", "[zip_arrays]")
     REQUIRE(AB(0, 0) == std::make_tuple(0.0, 0));
 }
 
+TEST_CASE("bounds checking operator works as expected", "[bounds_check]")
+{
+    auto A1 = nd::index_array(10, 10);
+    auto A2 = nd::index_array(10, 10) | nd::bounds_check();
+    REQUIRE_NOTHROW(A1(0, 0));
+    REQUIRE_NOTHROW(A2(0, 0));
+    REQUIRE_NOTHROW(A1(10, 10));
+    REQUIRE_THROWS (A2(10, 10));
+}
+
 TEST_CASE("providers can be reshaped", "[unique_provider] [shared_provider] [reshape]")
 {
     SECTION("unique")

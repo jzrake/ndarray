@@ -43,9 +43,9 @@ namespace nd
     // provider types
     //=========================================================================
     template<typename Function, std::size_t Rank> class basic_provider_t;
-    template<std::size_t Rank, typename ValueType> class uniform_provider_t;
     template<std::size_t Rank, typename ValueType> class shared_provider_t;
     template<std::size_t Rank, typename ValueType> class unique_provider_t;
+    template<std::size_t Rank, typename ValueType> class uniform_provider_t;
 
 
     // provider factory functions
@@ -72,15 +72,11 @@ namespace nd
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
-    // array operator support structs
-    //=========================================================================
-    template<std::size_t Rank> class op_reshape_t;
-
-
     // array operator factory functions
     //=========================================================================
     auto shared();
     auto unique();
+    auto bounds_check();
     template<std::size_t Rank> auto reshape(shape_t<Rank> shape);
     template<typename... Args> auto reshape(Args... args);
     template<std::size_t Rank, typename ArrayType> auto replace(access_pattern_t<Rank>, ArrayType&&);
@@ -791,32 +787,6 @@ private:
 
 
 
-
-//=============================================================================
-template<std::size_t Rank, typename ValueType>
-class nd::uniform_provider_t
-{
-public:
-
-    using value_type = ValueType;
-    static constexpr std::size_t rank = Rank;
-
-    //=========================================================================
-    uniform_provider_t(shape_t<Rank> the_shape, ValueType the_value) : the_shape(the_shape), the_value(the_value) {}
-    const ValueType& operator()(const index_t<Rank>&) const { return the_value; }
-    auto shape() const { return the_shape; }
-    auto size() { return the_shape.volume(); }
-    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return uniform_provider_t<NewRank, ValueType>(new_shape, the_value); }
-
-private:
-    //=========================================================================
-    shape_t<Rank> the_shape;
-    ValueType the_value;
-};
-
-
-
-
 //=============================================================================
 template<std::size_t Rank, typename ValueType>
 class nd::shared_provider_t
@@ -899,6 +869,31 @@ private:
     shape_t<Rank> the_shape;
     memory_strides_t<Rank> strides;
     buffer_t<ValueType> buffer;
+};
+
+
+
+
+//=============================================================================
+template<std::size_t Rank, typename ValueType>
+class nd::uniform_provider_t
+{
+public:
+
+    using value_type = ValueType;
+    static constexpr std::size_t rank = Rank;
+
+    //=========================================================================
+    uniform_provider_t(shape_t<Rank> the_shape, ValueType the_value) : the_shape(the_shape), the_value(the_value) {}
+    const ValueType& operator()(const index_t<Rank>&) const { return the_value; }
+    auto shape() const { return the_shape; }
+    auto size() { return the_shape.volume(); }
+    template<std::size_t NewRank> auto reshape(shape_t<NewRank> new_shape) const { return uniform_provider_t<NewRank, ValueType>(new_shape, the_value); }
+
+private:
+    //=========================================================================
+    shape_t<Rank> the_shape;
+    ValueType the_value;
 };
 
 
@@ -1235,7 +1230,6 @@ auto nd::unique_array(Args... args)
 
 
 
-
 /**
  * @brief      Returns an index-array of the given shape, mapping the index (i,
  *             j, ...) to itself.
@@ -1249,14 +1243,7 @@ auto nd::unique_array(Args... args)
 template<std::size_t Rank>
 auto nd::index_array(shape_t<Rank> shape)
 {
-    auto mapping = [shape] (auto&& index)
-    {
-        if (! shape.contains(index))
-        {
-            throw std::out_of_range("out-of-range on index array");
-        }
-        return index;
-    };
+    auto mapping = [shape] (auto&& index) { return index; };
     return make_array(basic_provider_t<decltype(mapping), Rank>(mapping, shape));
 }
 
@@ -1366,6 +1353,33 @@ auto nd::unique()
     return [] (auto&& array)
     {
         return make_array(evaluate_as_shared(array.get_provider()));
+    };
+}
+
+
+
+
+/**
+ * @brief      Return an operator that turns an array into a bounds-checking
+ *             array.
+ *
+ * @return     The array
+ */
+auto nd::bounds_check()
+{
+    return [] (auto&& array)
+    {
+        constexpr std::size_t Rank = std::remove_reference_t<decltype(array)>::rank;
+
+        auto mapping = [array] (auto&& index)
+        {
+            if (! array.shape().contains(index))
+            {
+                throw std::out_of_range("index out-of-range");
+            }
+            return array(index);
+        };
+        return make_array(basic_provider_t<decltype(mapping), Rank>(mapping, array.shape()));
     };
 }
 
