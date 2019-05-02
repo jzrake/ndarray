@@ -242,10 +242,8 @@ TEST_CASE("can create strides", "[memory_strides]")
 
 TEST_CASE("array can be constructed with an index provider", "[array] [index_provider]")
 {
-    auto A = nd::make_array(nd::make_index_provider(10), nd::make_access_pattern(10));
-    auto B = nd::make_array(nd::make_index_provider(10));
+    auto A = nd::make_array(nd::make_index_provider(10));
     REQUIRE(A(5) == nd::make_index(5));
-    REQUIRE(B(5) == nd::make_index(5));
 }
 
 TEST_CASE("uniform provider can be constructed", "[uniform_provider]")
@@ -465,7 +463,7 @@ TEST_CASE("transform operator works as expected", "[op_transform]")
     }
     SECTION("with shared provider")
     {
-        auto B1 = nd::make_array(nd::make_shared_provider<double>(10));
+        auto B1 = nd::shared_array<double>(10);
         auto B2 = B1 | nd::transform([] (auto) { return 2.0; });
 
         for (auto index : B2.get_accessor())
@@ -475,7 +473,7 @@ TEST_CASE("transform operator works as expected", "[op_transform]")
     }
     SECTION("with unique provider")
     {
-        auto C1 = nd::make_array(nd::make_unique_provider<double>(10));
+        auto C1 = nd::unique_array<double>(10);
         auto C2 = C1 | nd::transform([] (auto) { return 2.0; });
 
         for (auto index : C2.get_accessor())

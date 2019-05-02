@@ -74,8 +74,6 @@ namespace nd
     template<typename ValueType, typename... Args> auto make_shared_provider(Args... args);
     template<typename ValueType, std::size_t Rank> auto make_unique_provider(shape_t<Rank> shape);
     template<typename ValueType, typename... Args> auto make_unique_provider(Args... args);
-    template<typename Provider, typename Accessor> auto evaluate_as_shared(Provider&&, Accessor&&);
-    template<typename Provider, typename Accessor> auto evaluate_as_unique(Provider&&, Accessor&&);
     template<typename Provider> auto evaluate_as_shared(Provider&&);
     template<typename Provider> auto evaluate_as_unique(Provider&&);
     template<std::size_t Rank> auto make_index_provider(shape_t<Rank> shape);
@@ -95,8 +93,15 @@ namespace nd
 
     // array factory functions
     //=========================================================================
-    template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
+    // template<typename Provider, typename Accessor> auto make_array(Provider&&, Accessor&&);
     template<typename Provider> auto make_array(Provider&&);
+    template<typename ValueType, std::size_t Rank> auto shared_array(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto shared_array(Args... args);
+    template<typename ValueType, std::size_t Rank> auto unique_array(shape_t<Rank> shape);
+    template<typename ValueType, typename... Args> auto unique_array(Args... args);
+    template<std::size_t Rank> auto index_array(shape_t<Rank> shape);
+    template<typename... Args> auto index_array(Args... args);
+
     template<typename... ArrayTypes> auto zip_arrays(ArrayTypes&&... arrays);
 
 
@@ -722,17 +727,16 @@ public:
     auto operator()(Array&& array) const
     {
         const auto& provider = array.get_provider();
-        const auto& accessor = array.get_accessor();
 
-        if (! accessor.contiguous())
-        {
-            throw std::logic_error("cannot reshape array with non-contiguous access pattern");
-        }
+        // if (! accessor.contiguous())
+        // {
+        //     throw std::logic_error("cannot reshape array with non-contiguous access pattern");
+        // }
         if (new_shape.volume() != provider.size())
         {
             throw std::logic_error("cannot reshape array to a different size");
         }
-        return make_array(provider.reshape(new_shape), make_access_pattern(new_shape));
+        return make_array(provider.reshape(new_shape));
     }
 
 private:
@@ -765,8 +769,7 @@ public:
     template<typename ArrayToPatch>
     auto operator()(ArrayToPatch&& array_to_patch) const
     {
-        return make_array(make_replace_provider(region_to_replace, array_to_patch, replacement_array),
-            array_to_patch.get_accessor());
+        return make_array(make_replace_provider(region_to_replace, array_to_patch, replacement_array));
     }
 
 private:
@@ -790,8 +793,7 @@ public:
     template<typename ArgumentArray>
     auto operator()(ArgumentArray&& argument_array) const
     {
-        return make_array(make_transform_provider(argument_array, function),
-            argument_array.get_accessor());
+        return make_array(make_transform_provider(argument_array, function));
     }
 
 private:
@@ -808,42 +810,37 @@ class nd::array_t
 {
 public:
 
-    using Accessor = access_pattern_t<Rank>;
     using provider_type = Provider;
-    using accessor_type = Accessor;
     using value_type = typename Provider::value_type;
     static constexpr std::size_t rank = Rank;
 
     //=========================================================================
-    array_t(Provider&& provider, Accessor accessor)
-    : provider(std::move(provider))
-    , accessor(accessor) {}
+    array_t(Provider&& provider) : provider(std::move(provider)) {}
 
     // indexing functions
     //=========================================================================
-    template<typename... Args> decltype(auto) operator()(Args... args) const { return provider(accessor.map_index(make_index(args...))); }
-    template<typename... Args> decltype(auto) operator()(Args... args)       { return provider(accessor.map_index(make_index(args...))); }
-    decltype(auto) operator()(const index_t<Rank>& index) const { return provider(accessor.map_index(index)); }
-    decltype(auto) operator()(const index_t<Rank>& index)       { return provider(accessor.map_index(index)); }
+    template<typename... Args> decltype(auto) operator()(Args... args) const { return provider(make_index(args...)); }
+    template<typename... Args> decltype(auto) operator()(Args... args)       { return provider(make_index(args...)); }
+    decltype(auto) operator()(const index_t<Rank>& index) const { return provider(index); }
+    decltype(auto) operator()(const index_t<Rank>& index)       { return provider(index); }
 
     // query functions and operator support
     //=========================================================================
     auto shape() const { return provider.shape(); }
     auto size() const { return provider.size(); }
     const Provider& get_provider() const { return provider; }
-    const Accessor& get_accessor() const { return accessor; }
+    auto get_accessor() { return make_access_pattern(provider.shape()); }
     template<typename Function> auto operator|(Function&& fn) const & { return fn(*this); }
     template<typename Function> auto operator|(Function&& fn)      && { return fn(std::move(*this)); }
 
     // methods converting this to a memory-backed array
     //=========================================================================
-    auto unique() const { return make_array(evaluate_as_unique(provider, accessor)); }
-    auto shared() const { return make_array(evaluate_as_shared(provider, accessor)); }
+    auto unique() const { return make_array(evaluate_as_unique(provider)); }
+    auto shared() const { return make_array(evaluate_as_shared(provider)); }
 
 private:
     //=========================================================================
     Provider provider;
-    Accessor accessor;
 };
 
 
@@ -1413,33 +1410,19 @@ auto nd::make_replace_provider(
         std::forward<ReplacementArray>(replacement_array));
 }
 
-template<typename Provider, typename Accessor>
-auto nd::evaluate_as_unique(Provider&& source_provider, Accessor&& source_accessor)
+template<typename Provider>
+auto nd::evaluate_as_unique(Provider&& source_provider)
 {
     using value_type = typename std::remove_reference_t<Provider>::value_type;
-    auto target_shape = source_accessor.shape();
+    auto target_shape = source_provider.shape();
     auto target_accessor = make_access_pattern(target_shape);
     auto target_provider = make_unique_provider<value_type>(target_shape);
 
-    for (auto&& [target_index, source_index] : zip(target_accessor, source_accessor))
+    for (const auto& index : target_accessor)
     {
-        target_provider(target_index) = source_provider(source_index);
+        target_provider(index) = source_provider(index);
     }
     return target_provider;
-}
-
-template<typename Provider, typename Accessor>
-auto nd::evaluate_as_shared(Provider&& source_provider, Accessor&& source_accessor)
-{
-    return evaluate_as_unique(
-        std::forward<Provider>(source_provider),
-        std::forward<Accessor>(source_accessor)).shared();
-}
-
-template<typename Provider>
-auto nd::evaluate_as_unique(Provider&& provider)
-{
-    return evaluate_as_unique(std::forward<Provider>(provider), make_access_pattern(provider.shape()));
 }
 
 template<typename Provider>
@@ -1452,20 +1435,46 @@ auto nd::evaluate_as_shared(Provider&& provider)
 
 
 //=============================================================================
-template<typename Provider, typename Accessor>
-auto nd::make_array(Provider&& provider, Accessor&& accessor)
-{
-    return array_t<Provider::rank, Provider>(
-        std::forward<Provider>(provider),
-        std::forward<Accessor>(accessor));
-}
-
 template<typename Provider>
 auto nd::make_array(Provider&& provider)
 {
-    return array_t<Provider::rank, Provider>(
-        std::forward<Provider>(provider),
-        make_access_pattern(provider.shape()));
+    return array_t<Provider::rank, Provider>(std::forward<Provider>(provider));
+}
+
+template<typename ValueType, std::size_t Rank>
+auto nd::shared_array(shape_t<Rank> shape)
+{
+    return make_array(make_shared_provider<ValueType>(shape));
+}
+
+template<typename ValueType, typename... Args>
+auto nd::shared_array(Args... args)
+{
+    return make_array(make_shared_provider<ValueType>(args...));
+}
+
+template<typename ValueType, std::size_t Rank>
+auto nd::unique_array(shape_t<Rank> shape)
+{
+    return make_array(make_unique_provider<ValueType>(shape));
+}
+
+template<typename ValueType, typename... Args>
+auto nd::unique_array(Args... args)
+{
+    return make_array(make_unique_provider<ValueType>(args...));
+}
+
+template<std::size_t Rank>
+auto nd::index_array(shape_t<Rank> shape)
+{
+    return make_array(make_index_provider(shape));
+}
+
+template<typename... Args>
+auto nd::index_array(Args... args)
+{
+    return make_array(make_index_provider(args...));
 }
 
 template<typename... ArrayTypes>
@@ -1484,7 +1493,7 @@ auto nd::shared()
 {
     return [] (auto&& array)
     {
-        return make_array(evaluate_as_unique(array.get_provider(), array.get_accessor()));
+        return make_array(evaluate_as_unique(array.get_provider()));
     };
 }
 
@@ -1492,7 +1501,7 @@ auto nd::unique()
 {
     return [] (auto&& array)
     {
-        return make_array(evaluate_as_shared(array.get_provider(), array.get_accessor()));
+        return make_array(evaluate_as_shared(array.get_provider()));
     };
 }
 
