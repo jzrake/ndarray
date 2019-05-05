@@ -1,5 +1,5 @@
 # Introduction
-
+_Note: this code is in good working order, but further development is taking place at [ndarray-v2](https://github.com/jzrake/ndarray-v2)_
 
 This project is a header-only implementation of a numpy-like `ndarray` template for pure C++14. It should be comparable to (but smaller and more modern than) [Boost.MultiArray](https://www.boost.org/doc/libs/1_68_0/libs/multi_array/doc/index.html).
 
